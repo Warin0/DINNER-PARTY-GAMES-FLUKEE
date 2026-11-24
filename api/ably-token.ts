@@ -1,4 +1,5 @@
-import * as Ably from "ably";
+import { createHttpClient } from "@ably/pubsub-server";
+import type { capabilityOp } from "@ably/pubsub-server";
 import { createHash, timingSafeEqual } from "node:crypto";
 
 // Vercel serverless function: issues short-lived Ably tokens so the API key never reaches the browser.
@@ -18,7 +19,7 @@ export default async function handler(req: any, res: any) {
   const room = String(p.room || "");
   if (!/^[A-Z]{4}$/.test(room)) return res.status(400).json({ error: "bad room" });
 
-  let capability: Record<string, Ably.capabilityOp[]>;
+  let capability: Record<string, capabilityOp[]>;
   let clientId: string;
 
   if (role === "host") {
@@ -44,7 +45,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const rest = new Ably.Rest({ key });
+    const rest = createHttpClient({ key });
     const tokenRequest = await rest.auth.createTokenRequest({ capability, clientId, ttl: 6 * 60 * 60 * 1000 });
     res.setHeader("Cache-Control", "no-store");
     return res.status(200).json(tokenRequest);

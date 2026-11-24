@@ -1,4 +1,4 @@
-import * as Ably from "ably";
+import { createClient, type Message, type PubSubClient } from "@ably/pubsub-device";
 
 export interface Transport {
   mode: "ably" | "local" | "memory";
@@ -39,13 +39,13 @@ export class AblyTransport implements Transport {
   private conn = "connecting";
   private tokenState = "pending";
   private lastError = "";
-  private client: Ably.Realtime;
+  private client: PubSubClient;
   /** layered diagnostics: connection state, token fetch result, last realtime error */
   get statusText() {
     return `${this.conn} · token: ${this.tokenState}${this.lastError ? ` · ${this.lastError}` : ""}`;
   }
   constructor(private o: AuthOpts) {
-    this.client = new Ably.Realtime({
+    this.client = createClient({
       // our own token fetch (POST keeps the password out of URLs/logs) so failures show their real cause
       authCallback: (_params, callback) => {
         fetch("/api/ably-token", {
@@ -89,7 +89,7 @@ export class AblyTransport implements Transport {
   subscribe(channel: string, cb: (data: any) => void) {
     // phones replay the most recent public state when they attach, so late joiners never wait for the next update
     const ch = this.chan(channel, this.o.role === "player" && channel.endsWith(":state"));
-    const listener = (msg: Ably.Message) => cb(msg.data);
+    const listener = (msg: Message) => cb(msg.data);
     ch.subscribe("m", listener).catch((e: any) => {
       this.lastError = `subscribe failed (${channel.split(":").slice(2).join(":")}): ${fmtErr(e)}`;
     });

@@ -12,7 +12,8 @@
     "test:api": "tsx scripts/test-token-api.ts"
   },
   "dependencies": {
-    "ably": "^2.6.0",
+    "@ably/pubsub-device": "^3.2.0",
+    "@ably/pubsub-server": "^3.2.0",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

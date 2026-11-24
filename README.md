@@ -10,7 +10,7 @@ Three realtime party games for a shared screen + up to ~80 phones. React + TypeS
 
 ## How it works
 
-Vercel only serves static files and one tiny serverless function, so realtime goes through **Ably** (free: 200 connections, 500 msg/s, 6M msgs/month).
+Vercel only serves static files and one tiny serverless function, so realtime goes through **Ably**. Ably's Free package (500 monthly active users, 500 concurrent connections, 6M messages/month) is plenty for ~80 players. Browsers use `@ably/pubsub-device`; the token function uses `@ably/pubsub-server` (new Ably accounts on MAU pricing reject the old `ably` package).
 
 ```
 phones ──publish──▶ opl:ROOM:in:0..7  ──▶ host screen (referee: runs all game logic in the browser)
