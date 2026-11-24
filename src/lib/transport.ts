@@ -8,13 +8,32 @@ export interface Transport {
 }
 
 // ---------- Ably (production, works across devices) ----------
+export interface AuthOpts {
+  role: "host" | "player";
+  room: string;
+  /** player id (players only) */
+  pid?: string;
+  /** host password (hosts only) */
+  password?: string;
+}
+
+function authParams(o: AuthOpts): Record<string, string> {
+  const p: Record<string, string> = { role: o.role, room: o.room };
+  if (o.pid) p.pid = o.pid;
+  if (o.password) p.password = o.password;
+  return p;
+}
+
+export class UnauthorizedError extends Error {}
+
 export class AblyTransport implements Transport {
   mode = "ably" as const;
   private client: Ably.Realtime;
-  constructor(clientId?: string) {
+  constructor(o: AuthOpts) {
     this.client = new Ably.Realtime({
-      authUrl: clientId ? `/api/ably-token?clientId=${encodeURIComponent(clientId)}` : "/api/ably-token",
-      authMethod: "GET",
+      authUrl: "/api/ably-token",
+      authMethod: "POST", // keeps the password out of URLs and logs
+      authParams: authParams(o),
       echoMessages: false
     });
   }
@@ -99,14 +118,21 @@ export class MemoryTransport implements Transport {
 }
 
 // Picks Ably when the token endpoint is configured, otherwise falls back to local demo mode.
-export async function createTransport(clientId?: string): Promise<Transport> {
+// Throws UnauthorizedError when a host password is required but missing/wrong.
+export async function createTransport(o: AuthOpts): Promise<Transport> {
   const forceLocal = new URLSearchParams(location.search).has("local");
   if (!forceLocal) {
     try {
-      const res = await fetch("/api/ably-token" + (clientId ? `?clientId=${encodeURIComponent(clientId)}` : ""));
+      const res = await fetch("/api/ably-token", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(authParams(o))
+      });
+      if (res.status === 401) throw new UnauthorizedError("wrong password");
       const ct = res.headers.get("content-type") || "";
-      if (res.ok && ct.includes("json")) return new AblyTransport(clientId);
-    } catch {
+      if (res.ok && ct.includes("json")) return new AblyTransport(o);
+    } catch (e) {
+      if (e instanceof UnauthorizedError) throw e;
       /* fall through to local */
     }
   }

@@ -27,8 +27,8 @@ phones ◀──────────── opl:ROOM:p:<id>     ◀── pri
 
 1. Create a free account at <https://ably.com> → create an app → copy an API key (needs *publish* + *subscribe*).
 2. Push this repo to GitHub and import it in Vercel (framework preset: **Vite**; build `npm run build`, output `dist` – auto-detected).
-3. In Vercel → Project → Settings → Environment Variables add `ABLY_API_KEY` = your key, then redeploy.
-4. Open `https://<your-app>.vercel.app/host` on the big screen/projector, players scan the QR code.
+3. In Vercel → Project → Settings → Environment Variables add `ABLY_API_KEY` = your key **and `HOST_PASSWORD` = a password of your choice**, then redeploy.
+4. Open `https://<your-app>.vercel.app/host` on the big screen/projector and log in with the host password; players scan the QR code (they need no login).
 
 Without `ABLY_API_KEY` the app falls back to **demo mode** (BroadcastChannel – only tabs of the same browser), which is handy for trying it locally.
 
@@ -39,10 +39,12 @@ npm install
 npm run dev              # http://localhost:5173/host?local=1  and  /play?room=XXXX&local=1&pid=a
 npm run typecheck
 npm run simulate         # 80 simulated phones play all three games against the engine
+npm run test:api         # checks the token function: host password + player permissions
 ```
 
 ## Notes & limits
 
 * The host browser tab is the referee – keep it open (it can reload; players reconnect automatically but the running round resets).
-* Anyone who inspects the network could publish as host; fine for a party, not for money games.
+* **Host login:** `/host` asks for `HOST_PASSWORD`, checked server-side before an Ably token with host rights is issued. Phones get minimum-rights tokens (they can only send input to the host inbox, receive public state and their own private channel), so a player cannot publish game state or pose as the host. If `HOST_PASSWORD` is not set, hosting is open — always set it in production.
+* Players are identified by a random id stored on their phone; there are no player accounts.
 * Game-by-game message budget (80 phones): idle lobby ≈ 80 msg/s, finger race peaks ≈ 370 msg/s in simulation, bursts above 500 msg/s are throttled by Ably, not dropped permanently.

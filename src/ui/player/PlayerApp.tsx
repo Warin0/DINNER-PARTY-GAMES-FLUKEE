@@ -23,7 +23,7 @@ export function PlayerApp() {
     }
     localStorage.setItem("opl-name", n);
     if (!params.get("pid")) localStorage.setItem(`opl-id-${room}`, id);
-    const tr = await createTransport("p-" + id);
+    const tr = await createTransport({ role: "player", room, pid: id });
     setClient(new PlayerClient(tr, room, id, n));
     setBusy(false);
   };
