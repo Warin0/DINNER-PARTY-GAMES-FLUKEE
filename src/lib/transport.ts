@@ -31,16 +31,41 @@ export class UnauthorizedError extends Error {}
 export class AblyTransport implements Transport {
   mode = "ably" as const;
   statusText = "connecting…";
+  private conn = "connecting";
+  private authError = "";
   private client: Ably.Realtime;
   constructor(private o: AuthOpts) {
     this.client = new Ably.Realtime({
-      authUrl: "/api/ably-token",
-      authMethod: "POST", // keeps the password out of URLs and logs
-      authParams: authParams(o),
+      // our own token fetch (POST keeps the password out of URLs/logs) so failures show their real cause
+      authCallback: (_params, callback) => {
+        fetch("/api/ably-token", {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams(authParams(o))
+        })
+          .then(async (res) => {
+            const text = await res.text();
+            if (!res.ok) throw new Error(`token endpoint ${res.status}: ${text.replace(/\s+/g, " ").slice(0, 160)}`);
+            let json: any;
+            try {
+              json = JSON.parse(text);
+            } catch {
+              throw new Error(`token endpoint returned non-JSON: ${text.replace(/\s+/g, " ").slice(0, 120)}`);
+            }
+            this.authError = "";
+            callback(null, json);
+          })
+          .catch((e: any) => {
+            this.authError = String(e?.message ?? e);
+            this.statusText = `${this.conn} — ${this.authError}`;
+            callback(this.authError, null);
+          });
+      },
       echoMessages: false
     });
     this.client.connection.on((c) => {
-      this.statusText = c.current + (c.reason ? ` — ${c.reason.message}` : "");
+      this.conn = c.current;
+      this.statusText = c.current + (this.authError ? ` — ${this.authError}` : c.reason ? ` — ${c.reason.message}` : "");
     });
   }
   private chan(name: string, rewind = false) {
