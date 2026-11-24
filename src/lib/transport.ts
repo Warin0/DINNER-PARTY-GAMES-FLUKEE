@@ -3,7 +3,7 @@ import * as Ably from "ably";
 export interface Transport {
   mode: "ably" | "local" | "memory";
   /** human-readable realtime connection status, for diagnostics */
-  statusText?: string;
+  readonly statusText?: string;
   publish(channel: string, data: unknown): void;
   subscribe(channel: string, cb: (data: any) => void): () => void;
   close(): void;
@@ -28,12 +28,22 @@ function authParams(o: AuthOpts): Record<string, string> {
 
 export class UnauthorizedError extends Error {}
 
+function fmtErr(e: any): string {
+  if (!e) return "";
+  const cause = e.cause?.message ? `: ${e.cause.message}` : "";
+  return `${e.message ?? e}${e.code ? ` (code ${e.code}${e.statusCode ? `/${e.statusCode}` : ""}${cause})` : cause}`;
+}
+
 export class AblyTransport implements Transport {
   mode = "ably" as const;
-  statusText = "connecting…";
   private conn = "connecting";
-  private authError = "";
+  private tokenState = "pending";
+  private lastError = "";
   private client: Ably.Realtime;
+  /** layered diagnostics: connection state, token fetch result, last realtime error */
+  get statusText() {
+    return `${this.conn} · token: ${this.tokenState}${this.lastError ? ` · ${this.lastError}` : ""}`;
+  }
   constructor(private o: AuthOpts) {
     this.client = new Ably.Realtime({
       // our own token fetch (POST keeps the password out of URLs/logs) so failures show their real cause
@@ -45,27 +55,27 @@ export class AblyTransport implements Transport {
         })
           .then(async (res) => {
             const text = await res.text();
-            if (!res.ok) throw new Error(`token endpoint ${res.status}: ${text.replace(/\s+/g, " ").slice(0, 160)}`);
+            if (!res.ok) throw new Error(`endpoint ${res.status}: ${text.replace(/\s+/g, " ").slice(0, 160)}`);
             let json: any;
             try {
               json = JSON.parse(text);
             } catch {
-              throw new Error(`token endpoint returned non-JSON: ${text.replace(/\s+/g, " ").slice(0, 120)}`);
+              throw new Error(`endpoint returned non-JSON: ${text.replace(/\s+/g, " ").slice(0, 120)}`);
             }
-            this.authError = "";
+            this.tokenState = "received";
             callback(null, json);
           })
           .catch((e: any) => {
-            this.authError = String(e?.message ?? e);
-            this.statusText = `${this.conn} — ${this.authError}`;
-            callback(this.authError, null);
+            this.tokenState = `FAILED ${String(e?.message ?? e)}`;
+            callback(String(e?.message ?? e), null);
           });
       },
       echoMessages: false
     });
     this.client.connection.on((c) => {
       this.conn = c.current;
-      this.statusText = c.current + (this.authError ? ` — ${this.authError}` : c.reason ? ` — ${c.reason.message}` : "");
+      if (c.current === "connected") this.tokenState = "ok";
+      if (c.reason) this.lastError = fmtErr(c.reason);
     });
   }
   private chan(name: string, rewind = false) {
@@ -73,7 +83,7 @@ export class AblyTransport implements Transport {
   }
   publish(channel: string, data: unknown) {
     this.chan(channel).publish("m", data as any).catch((e: any) => {
-      this.statusText = `publish failed — ${e?.message ?? e}`;
+      this.lastError = `publish failed: ${fmtErr(e)}`;
     });
   }
   subscribe(channel: string, cb: (data: any) => void) {
@@ -81,7 +91,7 @@ export class AblyTransport implements Transport {
     const ch = this.chan(channel, this.o.role === "player" && channel.endsWith(":state"));
     const listener = (msg: Ably.Message) => cb(msg.data);
     ch.subscribe("m", listener).catch((e: any) => {
-      this.statusText = `subscribe failed (${channel}) — ${e?.message ?? e}`;
+      this.lastError = `subscribe failed (${channel.split(":").slice(2).join(":")}): ${fmtErr(e)}`;
     });
     return () => ch.unsubscribe("m", listener);
   }
