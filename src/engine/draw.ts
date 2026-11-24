@@ -7,6 +7,10 @@ export interface DrawOptions {
   seconds: number;
   lang: "en" | "th";
   revealMs?: number;
+  /** host-supplied words ("word" or "word|alt|alt") */
+  customWords?: string[];
+  /** use only the host's words (needs at least one) */
+  customOnly?: boolean;
 }
 
 export interface Stroke {
@@ -35,6 +39,8 @@ export class DrawGame implements Game {
 
   private queue: string[];
   private words: string[];
+  private custom: string[];
+  private customOnly: boolean;
   private drawerId = "";
   private display = "";
   private accepted: string[] = [];
@@ -60,12 +66,18 @@ export class DrawGame implements Game {
     const ready = [...ctx.players.values()].filter((p) => p.ready);
     this.queue = shuffle(ready.map((p) => p.id));
     this.rounds = Math.max(1, Math.min(opts.rounds, this.queue.length || 1));
-    this.words = shuffle(WORDS[opts.lang]);
+    this.custom = (opts.customWords ?? []).filter(Boolean);
+    this.customOnly = !!opts.customOnly && this.custom.length > 0;
+    this.words = this.pool();
     this.nextRound();
   }
 
+  private pool(): string[] {
+    return shuffle(this.customOnly ? this.custom : [...this.custom, ...WORDS[this.lang]]);
+  }
+
   private nextWord(): void {
-    if (this.words.length === 0) this.words = shuffle(WORDS[this.lang]);
+    if (this.words.length === 0) this.words = this.pool();
     const entry = parseEntry(this.words.pop()!);
     this.display = entry.display;
     this.accepted = entry.accepted;

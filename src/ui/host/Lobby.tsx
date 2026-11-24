@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { HostEngine } from "../../engine/host";
+import { parseCustomWords } from "../../lib/words";
 import { Scoreboard } from "./Scoreboard";
 
 export function Lobby({ engine, qr, joinUrl }: { engine: HostEngine; qr: string; joinUrl: string }) {
@@ -9,6 +10,9 @@ export function Lobby({ engine, qr, joinUrl }: { engine: HostEngine; qr: string;
   const [rounds, setRounds] = useState(8);
   const [seconds, setSeconds] = useState(60);
   const [lang, setLang] = useState<"en" | "th">("th");
+  const [wordsText, setWordsText] = useState(() => localStorage.getItem("opl-custom-words") || "");
+  const [customOnly, setCustomOnly] = useState(() => localStorage.getItem("opl-custom-only") === "1");
+  const customWords = parseCustomWords(wordsText);
   const [interval, setIntervalSec] = useState(6);
   const [pattern, setPattern] = useState<"line" | "full">("line");
   const [target, setTarget] = useState(120);
@@ -58,7 +62,38 @@ export function Lobby({ engine, qr, joinUrl }: { engine: HostEngine; qr: string;
               </select>
             </label>
           </div>
-          <button className="btn big" disabled={ready < 1} onClick={() => engine.startGame({ game: "draw", opts: { rounds, seconds, lang } })}>
+          <label className="wordsbox">
+            Your own words <span className="muted small">(one per line · add answers with | e.g. <code>ไก่ทอด|fried chicken</code>)</span>
+            <textarea
+              rows={5}
+              value={wordsText}
+              placeholder={"birthday cake\nคาราโอเกะ|karaoke\nsongkran"}
+              onChange={(e) => {
+                setWordsText(e.target.value);
+                localStorage.setItem("opl-custom-words", e.target.value);
+              }}
+            />
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={customOnly}
+              onChange={(e) => {
+                setCustomOnly(e.target.checked);
+                localStorage.setItem("opl-custom-only", e.target.checked ? "1" : "0");
+              }}
+            />
+            Use only my words ({customWords.length} entered)
+          </label>
+          {customOnly && customWords.length > 0 && customWords.length < rounds && (
+            <div className="muted small">⚠ Fewer words than rounds — words will repeat.</div>
+          )}
+          {customOnly && customWords.length === 0 && <div className="muted small">⚠ No words entered — built-in words will be used.</div>}
+          <button
+            className="btn big"
+            disabled={ready < 1}
+            onClick={() => engine.startGame({ game: "draw", opts: { rounds, seconds, lang, customWords, customOnly } })}
+          >
             Start drawing {ready < 1 && "(need a ready player)"}
           </button>
         </div>

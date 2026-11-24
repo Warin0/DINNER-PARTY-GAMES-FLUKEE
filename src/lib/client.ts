@@ -63,11 +63,19 @@ export class PlayerClient {
   private onState(s: PubState) {
     if (!s || s.t !== "state") return;
     this.view.offset = s.now - Date.now();
-    const leftGame = this.view.state?.game && s.game !== this.view.state.game;
-    if (leftGame || !s.game) {
+    // Drop only what belonged to the game that just ended. Private messages for the NEXT game can
+    // arrive before its public state does, so they must survive a direct game-to-game switch.
+    const prev = this.view.state?.game;
+    if (!s.game) {
       this.view.card = undefined;
       this.view.word = undefined;
       this.view.claim = undefined;
+    } else if (prev && prev !== s.game) {
+      if (prev === "bingo") {
+        this.view.card = undefined;
+        this.view.claim = undefined;
+      }
+      if (prev === "draw") this.view.word = undefined;
     }
     const g = s.g as { round?: number } | undefined;
     if (this.view.word && g?.round !== undefined && g.round !== this.view.word.round) this.view.word = undefined;

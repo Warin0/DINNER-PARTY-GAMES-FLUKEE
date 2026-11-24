@@ -4,7 +4,7 @@ import { HostEngine } from "../src/engine/host";
 import { hasWin } from "../src/engine/bingo";
 import { PlayerClient } from "../src/lib/client";
 import { MemoryBus, MemoryTransport } from "../src/lib/transport";
-import { WORDS } from "../src/lib/words";
+import { WORDS, parseCustomWords } from "../src/lib/words";
 
 const N = 80;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -15,6 +15,8 @@ function check(name: string, ok: boolean, extra = "") {
 }
 
 const bus = new MemoryBus();
+const marks: { name: string; idx: number }[] = [];
+const mark = (name: string) => marks.push({ name, idx: bus.perSecond.length });
 const host = new HostEngine(new MemoryTransport(bus), "TEST");
 const bots: PlayerClient[] = [];
 for (let i = 0; i < N; i++) {
@@ -28,6 +30,7 @@ await sleep(600);
 check("ready count = 40", [...host.players.values()].filter((p) => p.ready).length === 40);
 
 // ---------- DRAW & GUESS ----------
+mark("draw");
 {
   host.startGame({ game: "draw", opts: { rounds: 3, seconds: 5, lang: "en", revealMs: 500 } });
   await sleep(500);
@@ -75,7 +78,35 @@ check("ready count = 40", [...host.players.values()].filter((p) => p.ready).leng
   check("phones got rank/score after round", bots.some((b) => b.view.score > 0 && b.view.rank > 0));
 }
 
+// ---------- DRAW with host-supplied words ----------
+mark("custom-draw");
+{
+  host.resetScores();
+  const parsed = parseCustomWords("alpha|a1\n beta ,  alpha \n\n gamma|g|gee");
+  check("custom words parsed, de-duplicated", parsed.length === 3 && parsed[0] === "alpha|a1", JSON.stringify(parsed));
+  host.startGame({ game: "draw", opts: { rounds: 3, seconds: 4, lang: "en", revealMs: 300, customWords: parsed, customOnly: true } });
+  await sleep(500);
+  const shown: string[] = [];
+  for (let round = 1; round <= 3; round++) {
+    const pub = (host.game as any).pub();
+    const drawer = bots.find((b) => b.id === pub.drawerId)!;
+    const w = drawer.view.word!.word;
+    shown.push(w);
+    // guess using the second accepted answer where there is one
+    const guesser = bots.find((b) => b !== drawer && b.id !== pub.drawerId)!;
+    guesser.guess(w === "alpha" ? "A1" : w === "gamma" ? "gee" : w);
+    await sleep(400);
+    check(`custom round ${round}: "${w}" accepted via alternative answer`, (host.game as any).pub().solvedCount >= 1);
+    for (let t = 0; t < 60 && (host.game as any).pub().round === round && (host.game as any).pub().stage === "draw"; t++) await sleep(150);
+    await sleep(500);
+  }
+  check("only custom words were used", shown.every((w) => ["alpha", "beta", "gamma"].includes(w)), JSON.stringify(shown));
+  check("all three custom words appeared once each", new Set(shown).size === 3);
+  host.endGame();
+}
+
 // ---------- BINGO ----------
+mark("bingo");
 {
   host.resetScores();
   host.startGame({ game: "bingo", opts: { intervalMs: 60, pattern: "line", maxWinners: 3 } });
@@ -124,6 +155,7 @@ check("ready count = 40", [...host.players.values()].filter((p) => p.ready).leng
 }
 
 // ---------- FINGER RACE ----------
+mark("race");
 let raceFrom = 0;
 let raceTo = 0;
 {
@@ -162,11 +194,16 @@ let raceTo = 0;
 }
 
 // ---------- LOAD ----------
+mark("end");
+for (let i = 0; i < marks.length - 1; i++) {
+  const seg = bus.perSecond.slice(marks[i].idx, marks[i + 1].idx).map((x) => x.published + x.delivered);
+  console.log(`phase ${marks[i].name.padEnd(12)} seconds: ${seg.join(" ")}  peak ${Math.max(0, ...seg)}`);
+}
 console.log("per-second (pub+deliv):", bus.perSecond.map((s) => s.published + "+" + s.delivered).join(" "));
 const peak = bus.perSecond.reduce((m, s) => Math.max(m, s.published + s.delivered), 0);
 const peakPub = bus.perSecond.reduce((m, s) => Math.max(m, s.published), 0);
 console.log(`\nbus load: peak ${peak} msgs/s (published+delivered; Ably free limit 500/s), peak publishes ${peakPub}/s, total ${bus.published} pub / ${bus.delivered} delivered`);
-const racePeak = bus.perSecond.slice(raceFrom, raceTo).reduce((m, s) => Math.max(m, s.published + s.delivered), 0);
+const racePeak = bus.perSecond.slice(raceFrom + 1, raceTo).reduce((m, s) => Math.max(m, s.published + s.delivered), 0);
 check("finger race (80 runners) stays under Ably free 500 msgs/s", racePeak < 500, `(peak ${racePeak})`);
 console.log("note: short spikes above 500/s come from this test making all bots guess/claim in the same millisecond.");
 

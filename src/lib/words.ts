@@ -48,3 +48,22 @@ export function shuffle<T>(arr: T[], rnd: () => number = Math.random): T[] {
   }
   return a;
 }
+
+/** Parse the host's custom word box: one word per line (or comma separated); "word|alternative" accepts alternatives. */
+export function parseCustomWords(text: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of text.split(/[\n,;]+/)) {
+    const entry = raw
+      .split("|")
+      .map((x) => x.replace(/\s+/g, " ").trim().slice(0, 40))
+      .filter(Boolean)
+      .join("|");
+    const key = normalizeGuess(entry.split("|")[0] ?? "");
+    if (!entry || !key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(entry);
+    if (out.length >= 300) break;
+  }
+  return out;
+}

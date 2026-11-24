@@ -4,7 +4,7 @@ Three realtime party games for a shared screen + up to ~80 phones. React + TypeS
 
 | Game | How it plays |
 | --- | --- |
-| 🎨 **Draw & Guess** | A random **ready** player is picked to draw a secret word on their phone. The drawing appears on the big screen; everyone else types guesses on their phones. Faster guesses earn more points, hints appear as time runs out. Thai words accept the English answer too. |
+| 🎨 **Draw & Guess** | A random **ready** player is picked to draw a secret word on their phone. The drawing appears on the big screen; everyone else types guesses on their phones. Faster guesses earn more points, hints appear as time runs out. Thai words accept the English answer too. The host can paste in **their own words** (one per line, `word|alternative answer`) and choose to mix them in or use only those. |
 | 🎱 **Bingo** | Every phone gets its own random 5×5 card. Numbers (1–75) are called automatically; tap to mark, press BINGO. The host verifies the claim (false claims are locked out for 8 s). First 3 winners score 300/200/100. Win by any line or full card. |
 | 🏃 **Finger Race** | Alternate left/right thumbs as fast as you can. Steps are rate-limited on the host so tap-bots can't cheat. First finishers win 300/200/100. |
 
