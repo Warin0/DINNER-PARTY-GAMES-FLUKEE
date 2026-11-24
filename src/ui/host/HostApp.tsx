@@ -94,6 +94,7 @@ function HostScreen({ engine, mode }: { engine: HostEngine; mode: string }) {
         </div>
         <div className="muted small joinurl">{joinUrl.replace(/^https?:\/\//, "")}</div>
         <div className="spacer" />
+        <div className="pill" title="realtime connection">● {engine.tr.statusText ?? engine.tr.mode}</div>
         <div className="pill">👥 {online}/{all.length} online</div>
         <button className="btn ghost" onClick={() => setShowScores((s) => !s)}>🏆 Scores</button>
         {engine.phase === "game" && (

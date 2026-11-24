@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { PlayerClient } from "../../lib/client";
 import { createTransport } from "../../lib/transport";
-import { randomId, useSubscribe } from "../hooks";
+import { randomId, useSubscribe, useTicker } from "../hooks";
 import { DrawPlayer } from "./DrawPlayer";
 import { BingoPlayer } from "./BingoPlayer";
 import { RacePlayer } from "./RacePlayer";
@@ -70,6 +70,7 @@ export function PlayerApp() {
 function Player({ client }: { client: PlayerClient }) {
   const listeners = client.listeners;
   useSubscribe(listeners);
+  useTicker(1000);
   const v = client.view;
   const s = v.state;
 
@@ -82,7 +83,14 @@ function Player({ client }: { client: PlayerClient }) {
         {v.rank > 0 && <span className="pill">#{v.rank}</span>}
       </header>
 
-      {!s && <div className="center-block"><h2>Connecting…</h2><p className="muted">Waiting for the host screen</p></div>}
+      {!s && (
+        <div className="center-block">
+          <h2>Connecting…</h2>
+          <p className="muted">Waiting for the host screen</p>
+          <p className="muted small">Realtime: {client.tr.statusText ?? client.tr.mode}</p>
+          <p className="muted small">Make sure the host screen is open on this room ({client.room}).</p>
+        </div>
+      )}
       {s && !v.joined && <div className="center-block"><h2>Joining…</h2></div>}
 
       {s && v.joined && s.phase === "lobby" && (

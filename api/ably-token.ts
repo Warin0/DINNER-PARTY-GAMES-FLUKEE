@@ -37,7 +37,7 @@ export default async function handler(req: any, res: any) {
     if (!/^[a-z0-9]{4,24}$/.test(pid)) return res.status(400).json({ error: "bad player id" });
     clientId = `p-${pid}`;
     capability = {
-      [`opl:${room}:state`]: ["subscribe"],
+      [`opl:${room}:state`]: ["subscribe", "history"],
       [`opl:${room}:in:*`]: ["publish"],
       [`opl:${room}:p:${pid}`]: ["subscribe"]
     };

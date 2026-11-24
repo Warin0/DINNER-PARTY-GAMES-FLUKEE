@@ -26,6 +26,7 @@ r = await call({ role: "player", room: "ABCD", pid: "abc123def4" });
 ok("player gets token without password", r.status === 200 && r.body.clientId === "p-abc123def4");
 const cap = JSON.parse(r.body.capability);
 ok("player cannot publish to state", !cap["opl:ABCD:state"].includes("publish"));
+ok("player may replay last state (rewind)", cap["opl:ABCD:state"].includes("history"));
 ok("player can only publish to inbox", cap["opl:ABCD:in:*"].join() === "publish");
 ok("player only reads own private channel", Object.keys(cap).includes("opl:ABCD:p:abc123def4") && Object.keys(cap).length === 3);
 ok("role defaults to player even if role=admin", (await call({ role: "admin", room: "ABCD", pid: "abc123def4" })).body.clientId.startsWith("p-"));

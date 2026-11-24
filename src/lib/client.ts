@@ -26,9 +26,10 @@ export class PlayerClient {
   listeners = new Set<() => void>();
   private unsubs: (() => void)[] = [];
   private hb?: ReturnType<typeof setInterval>;
+  private retry?: ReturnType<typeof setInterval>;
   private sid = 0;
 
-  constructor(private tr: Transport, public room: string, public id: string, name: string) {
+  constructor(public tr: Transport, public room: string, public id: string, name: string) {
     this.view.name = name;
     this.unsubs.push(
       tr.subscribe(channels.state(room), (s) => this.onState(s)),
@@ -36,6 +37,10 @@ export class PlayerClient {
     );
     this.join();
     this.hb = setInterval(() => this.send({ t: "hello", id: this.id }), 15_000);
+    // replies can be lost while channels are still attaching, so keep asking until we are welcomed AND have state
+    this.retry = setInterval(() => {
+      if (!this.view.joined || !this.view.state) this.join();
+    }, 3000);
   }
 
   now() {
@@ -129,6 +134,7 @@ export class PlayerClient {
 
   close() {
     clearInterval(this.hb);
+    clearInterval(this.retry);
     this.unsubs.forEach((u) => u());
   }
 }

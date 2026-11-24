@@ -2,6 +2,8 @@ import * as Ably from "ably";
 
 export interface Transport {
   mode: "ably" | "local" | "memory";
+  /** human-readable realtime connection status, for diagnostics */
+  statusText?: string;
   publish(channel: string, data: unknown): void;
   subscribe(channel: string, cb: (data: any) => void): () => void;
   close(): void;
@@ -28,22 +30,34 @@ export class UnauthorizedError extends Error {}
 
 export class AblyTransport implements Transport {
   mode = "ably" as const;
+  statusText = "connecting…";
   private client: Ably.Realtime;
-  constructor(o: AuthOpts) {
+  constructor(private o: AuthOpts) {
     this.client = new Ably.Realtime({
       authUrl: "/api/ably-token",
       authMethod: "POST", // keeps the password out of URLs and logs
       authParams: authParams(o),
       echoMessages: false
     });
+    this.client.connection.on((c) => {
+      this.statusText = c.current + (c.reason ? ` — ${c.reason.message}` : "");
+    });
+  }
+  private chan(name: string, rewind = false) {
+    return rewind ? this.client.channels.get(name, { params: { rewind: "1" } }) : this.client.channels.get(name);
   }
   publish(channel: string, data: unknown) {
-    void this.client.channels.get(channel).publish("m", data as any);
+    this.chan(channel).publish("m", data as any).catch((e: any) => {
+      this.statusText = `publish failed — ${e?.message ?? e}`;
+    });
   }
   subscribe(channel: string, cb: (data: any) => void) {
-    const ch = this.client.channels.get(channel);
+    // phones replay the most recent public state when they attach, so late joiners never wait for the next update
+    const ch = this.chan(channel, this.o.role === "player" && channel.endsWith(":state"));
     const listener = (msg: Ably.Message) => cb(msg.data);
-    void ch.subscribe("m", listener);
+    ch.subscribe("m", listener).catch((e: any) => {
+      this.statusText = `subscribe failed (${channel}) — ${e?.message ?? e}`;
+    });
     return () => ch.unsubscribe("m", listener);
   }
   close() {
