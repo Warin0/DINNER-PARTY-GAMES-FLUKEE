@@ -13,6 +13,21 @@ export interface DrawOptions {
   customOnly?: boolean;
 }
 
+export interface RoundSummary {
+  round: number;
+  drawerId: string;
+  drawerName: string;
+  word: string;
+  solvers: { id: string; name: string; ms: number; points: number }[];
+  drawerPoints: number;
+}
+
+/** Scoring: every correct guess is worth BASE + up to SPEED_MAX depending on how much time was left. */
+export const BASE_POINTS = 100;
+export const SPEED_MAX = 400;
+export const DRAWER_PER_SOLVER = 50;
+export const DRAWER_MAX = 400;
+
 export interface Stroke {
   sid: number;
   c: string;
@@ -52,7 +67,16 @@ export class DrawGame implements Game {
   private rerolls = 1;
   private solved = new Map<string, number>(); // id -> points
   private solveOrder: string[] = [];
+  private solveMs = new Map<string, number>();
   private guessers = 0;
+
+  /** unique per drawing session */
+  sid = Math.random().toString(36).slice(2, 10);
+  /** per-round results, oldest first (host-only view) */
+  history: RoundSummary[] = [];
+  /** points per player for each finished round: perRound.get(id)[round-1] */
+  private perRound = new Map<string, number[]>();
+  private fastestMs = new Map<string, number>();
 
   // host-only view
   strokes: Stroke[] = [];
@@ -94,6 +118,7 @@ export class DrawGame implements Game {
     }
     if (!drawer || this.round >= this.rounds) {
       this.stage = "over";
+      if (this.history.length) this.sendRoundResults(true);
       this.ctx.touch();
       return;
     }
@@ -103,6 +128,7 @@ export class DrawGame implements Game {
     this.rerolls = 1;
     this.solved.clear();
     this.solveOrder = [];
+    this.solveMs.clear();
     this.strokes = [];
     this.feed = [];
     this.nextWord();
@@ -112,6 +138,57 @@ export class DrawGame implements Game {
     this.sendWord();
     this.emit("redraw");
     this.ctx.touch();
+  }
+
+  /** award points globally AND record them for this session's round table */
+  private gain(id: string, pts: number) {
+    if (pts <= 0) return;
+    this.ctx.award(id, pts);
+    const arr = this.perRound.get(id) ?? [];
+    while (arr.length < this.round) arr.push(0);
+    arr[this.round - 1] += pts;
+    this.perRound.set(id, arr);
+  }
+
+  perRoundOf(id: string): number[] {
+    const arr = (this.perRound.get(id) ?? []).slice();
+    while (arr.length < this.history.length) arr.push(0);
+    return arr;
+  }
+
+  totalOf(id: string): number {
+    return (this.perRound.get(id) ?? []).reduce((a, b) => a + b, 0);
+  }
+
+  /** session standings (everyone who joined; ties broken by fastest single guess, then name) */
+  sessionRanking() {
+    return [...this.ctx.players.values()]
+      .map((p) => ({ id: p.id, name: p.name, color: p.color, total: this.totalOf(p.id), fastest: this.fastestMs.get(p.id) ?? Infinity }))
+      .sort((a, b) => b.total - a.total || a.fastest - b.fastest || a.name.localeCompare(b.name));
+  }
+
+  private sendRoundResults(final: boolean) {
+    const ranking = this.sessionRanking();
+    const last = this.history[this.history.length - 1];
+    ranking.forEach((r, i) => {
+      const per = this.perRoundOf(r.id);
+      const sol = last?.solvers.find((s) => s.id === r.id);
+      const isDrawer = last?.drawerId === r.id;
+      this.ctx.send(r.id, {
+        t: "roundResult",
+        sid: this.sid,
+        round: last?.round ?? this.round,
+        rounds: this.rounds,
+        points: isDrawer ? last.drawerPoints : sol?.points ?? 0,
+        ms: sol?.ms ?? 0,
+        drawer: isDrawer,
+        total: r.total,
+        rank: i + 1,
+        players: ranking.length,
+        perRound: per,
+        final
+      });
+    });
   }
 
   private sendWord() {
@@ -139,8 +216,23 @@ export class DrawGame implements Game {
     this.stage = "reveal";
     this.revealUntil = this.ctx.now() + this.revealMs;
     const n = this.solved.size;
-    if (n > 0) this.ctx.award(this.drawerId, Math.min(300, 40 * n));
+    const drawerPoints = Math.min(DRAWER_MAX, DRAWER_PER_SOLVER * n);
+    this.gain(this.drawerId, drawerPoints);
+    this.history.push({
+      round: this.round,
+      drawerId: this.drawerId,
+      drawerName: this.ctx.players.get(this.drawerId)?.name ?? "?",
+      word: this.display,
+      solvers: this.solveOrder.map((id) => ({
+        id,
+        name: this.ctx.players.get(id)?.name ?? "?",
+        ms: this.solveMs.get(id) ?? 0,
+        points: this.solved.get(id) ?? 0
+      })),
+      drawerPoints
+    });
     this.ctx.syncScores();
+    this.sendRoundResults(this.round >= this.rounds);
     this.ctx.touch();
   }
 
@@ -154,11 +246,15 @@ export class DrawGame implements Game {
         if (!text.trim()) return;
         const ok = this.accepted.includes(normalizeGuess(text));
         if (ok) {
-          const remaining = Math.max(0, this.endsAt - this.ctx.now());
-          const pts = 50 + Math.round((150 * remaining) / (this.seconds * 1000));
+          const now = this.ctx.now();
+          const remaining = Math.max(0, this.endsAt - now);
+          const pts = BASE_POINTS + Math.round((SPEED_MAX * remaining) / (this.seconds * 1000));
+          const ms = Math.max(0, now - this.startedAt);
           this.solved.set(p.id, pts);
           this.solveOrder.push(p.id);
-          this.ctx.award(p.id, pts);
+          this.solveMs.set(p.id, ms);
+          this.fastestMs.set(p.id, Math.min(this.fastestMs.get(p.id) ?? Infinity, ms));
+          this.gain(p.id, pts);
           this.ctx.send(p.id, { t: "guessOk", points: pts });
           this.feed.push({ name: p.name, text: "", ok: true, at: this.ctx.now() });
           if (this.guessers > 0 && this.solved.size >= Math.ceil(this.guessers * 0.9)) this.endRound();
@@ -236,7 +332,18 @@ export class DrawGame implements Game {
       solvedCount: this.solved.size,
       guessers: this.guessers,
       solvers: this.solveOrder.slice(0, 12).map((id) => this.ctx.players.get(id)?.name ?? "?"),
-      word: this.stage === "reveal" ? this.display : undefined
+      word: this.stage === "reveal" ? this.display : undefined,
+      sid: this.sid,
+      board:
+        this.stage === "draw" || this.history.length === 0
+          ? undefined
+          : this.sessionRanking()
+              .slice(0, this.stage === "over" ? 10 : 5)
+              .map((r) => ({
+                name: r.name,
+                total: r.total,
+                gain: this.perRoundOf(r.id)[this.history.length - 1] ?? 0
+              }))
     };
   }
 }

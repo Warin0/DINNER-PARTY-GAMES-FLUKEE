@@ -34,6 +34,10 @@ export interface DrawPub {
   guessers: number;
   solvers: string[];
   word?: string;
+  /** id of this drawing session (so phones never show a previous session's results) */
+  sid: string;
+  /** session standings: top 5 after a round, top 10 at the end */
+  board?: { name: string; total: number; gain: number }[];
 }
 export interface BingoPub {
   stage: "running" | "over";
@@ -69,6 +73,22 @@ export type PrivMsg =
   | { t: "word"; word: string; round: number; rerolls: number }
   | { t: "card"; card: number[][] }
   | { t: "guessOk"; points: number }
+  | {
+      t: "roundResult";
+      sid: string;
+      round: number;
+      rounds: number;
+      /** points you earned this round (guess speed bonus, or drawer bonus) */
+      points: number;
+      /** guess time in ms if you guessed it, else 0 */
+      ms: number;
+      drawer: boolean;
+      total: number;
+      rank: number;
+      players: number;
+      perRound: number[];
+      final: boolean;
+    }
   | { t: "claimResult"; ok: boolean; place?: number; msg: string; lockMs?: number }
   | { t: "unknown" };
 

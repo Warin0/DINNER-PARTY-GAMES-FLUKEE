@@ -51,7 +51,7 @@ export function Lobby({ engine, qr, joinUrl }: { engine: HostEngine; qr: string;
       <section className="games">
         <div className="card game">
           <h3>🎨 Draw &amp; Guess</h3>
-          <p className="muted small">A random <b>ready</b> player draws a secret word on their phone. Everyone else types guesses.</p>
+          <p className="muted small">A random <b>ready</b> player draws a secret word on their phone. Everyone else types guesses. <b>Faster guess = more points</b> (100–500); the drawer earns 50 per player who guesses. Points add up over all rounds, with a final summary at the end.</p>
           <div className="fields">
             <label>Rounds<input type="number" min={1} max={40} value={rounds} onChange={(e) => setRounds(+e.target.value)} /></label>
             <label>Seconds<input type="number" min={20} max={180} value={seconds} onChange={(e) => setSeconds(+e.target.value)} /></label>

@@ -12,12 +12,34 @@ export function DrawPlayer({ client }: { client: PlayerClient }) {
   const isDrawer = g.drawerId === client.id;
   const left = g.endsAt - client.now();
 
+  const rr = v.roundResult && v.roundResult.sid === g.sid ? v.roundResult : undefined;
+
   if (g.stage === "over") {
+    const final = rr && rr.final ? rr : undefined;
     return (
       <div className="center-block">
-        <h2>Drawing finished 🎨</h2>
-        <p>Your score: <b>{v.score}</b>{v.rank ? ` · rank #${v.rank}` : ""}</p>
-        <p className="muted">Watch the big screen!</p>
+        <h2>🏁 Final results</h2>
+        {final ? (
+          <>
+            <div className="bigrank">#{final.rank}<small> of {final.players}</small></div>
+            <div className="bigtotal">{final.total} <small>points</small></div>
+            <div className="perround">
+              {final.perRound.map((pts, i) => (
+                <div key={i} className={"pr" + (pts ? "" : " zero")}><small>R{i + 1}</small><b>{pts || "–"}</b></div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p>Your drawing score: <b>{v.score}</b></p>
+        )}
+        {g.board && (
+          <ol className="podium tight phoneboard">
+            {g.board.slice(0, 5).map((b, i) => (
+              <li key={i}><span className="rank">{["🥇", "🥈", "🥉", "4", "5"][i]}</span><span className="grow">{b.name}</span><b>{b.total}</b></li>
+            ))}
+          </ol>
+        )}
+        <p className="muted small">Full table on the big screen!</p>
       </div>
     );
   }
@@ -26,7 +48,20 @@ export function DrawPlayer({ client }: { client: PlayerClient }) {
       <div className="center-block">
         <h2>The word was</h2>
         <div className="reveal">{g.word}</div>
-        <p className="muted">{g.solvedCount} player{g.solvedCount === 1 ? "" : "s"} guessed it · next round soon…</p>
+        {rr && rr.round === g.round ? (
+          <>
+            <div className={"gainbox" + (rr.points ? "" : " none")}>
+              {rr.points ? `+${rr.points}` : "+0"}
+              <small>
+                {rr.drawer ? "for your drawing" : rr.ms ? `guessed in ${(rr.ms / 1000).toFixed(1)}s` : "no guess this round"}
+              </small>
+            </div>
+            <p>Total <b>{rr.total}</b> · Rank <b>#{rr.rank}</b> of {rr.players}</p>
+          </>
+        ) : (
+          <p className="muted">{g.solvedCount} player{g.solvedCount === 1 ? "" : "s"} guessed it</p>
+        )}
+        <p className="muted small">{g.round < g.rounds ? `Round ${g.round + 1} of ${g.rounds} coming up…` : "Final results next…"}</p>
       </div>
     );
   }
@@ -54,6 +89,7 @@ function Guess({ client, g, left }: { client: PlayerClient; g: DrawPub; left: nu
     <div className="guess">
       <div className="timer big">{fmtSecs(left)}s</div>
       <p className="muted"><b>{g.drawerName}</b> is drawing — look at the big screen!</p>
+      <p className="muted small">⚡ Guess fast: up to {Math.round(100 + 400 * Math.max(0, Math.min(1, left / Math.max(1, g.endsAt - g.startedAt))))} points right now</p>
       <div className="hint">{g.hint}</div>
       {solved ? (
         <div className="solved">✅ Correct! +{v.lastGuessPoints!.points}<br /><small>Wait for the others…</small></div>

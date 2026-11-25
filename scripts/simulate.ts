@@ -105,6 +105,63 @@ mark("custom-draw");
   host.endGame();
 }
 
+// ---------- SCORING ACROSS ROUNDS ----------
+mark("scoring");
+{
+  host.resetScores();
+  host.startGame({ game: "draw", opts: { rounds: 3, seconds: 4, lang: "en", revealMs: 400 } });
+  await sleep(400);
+  const fast = bots[1]; // odd bots are not ready, so they never draw
+  const slow = bots[3];
+  const dg = host.game as any;
+  const drawers: string[] = [];
+  const fastPts: number[] = [];
+  const slowPts: number[] = [];
+  for (let round = 1; round <= 3; round++) {
+    // wait for this round to be live
+    for (let t = 0; t < 60 && !(dg.pub().round === round && dg.pub().stage === "draw"); t++) await sleep(100);
+    const pub = dg.pub();
+    const drawer = bots.find((b) => b.id === pub.drawerId)!;
+    drawers.push(drawer.id);
+    const word = drawer.view.word!.word;
+    fast.guess(word); // immediately
+    await sleep(1600);
+    slow.guess(word); // ~1.6 s later
+    await sleep(300);
+    for (let t = 0; t < 80 && dg.pub().round === round && dg.pub().stage === "draw"; t++) await sleep(100);
+    const h = dg.history[round - 1];
+    const f = h.solvers.find((x: any) => x.id === fast.id);
+    const sl = h.solvers.find((x: any) => x.id === slow.id);
+    fastPts.push(f.points);
+    slowPts.push(sl.points);
+    check(`round ${round}: faster guess scored more`, f.points > sl.points && f.ms < sl.ms, `(${f.points} @ ${f.ms}ms vs ${sl.points} @ ${sl.ms}ms)`);
+    check(`round ${round}: points inside ${100}-${500}`, f.points <= 500 && sl.points >= 100);
+    check(`round ${round}: drawer earned 50 per solver`, h.drawerPoints === 100, `(${h.drawerPoints})`);
+    await sleep(500);
+  }
+  for (let t = 0; t < 60 && dg.pub().stage !== "over"; t++) await sleep(100);
+  await sleep(500);
+  check("session over after 3 rounds", dg.pub().stage === "over");
+  const ranking = dg.sessionRanking();
+  const sumOk = ranking.every((r: any) => dg.perRoundOf(r.id).reduce((a: number, b: number) => a + b, 0) === r.total);
+  check("round columns add up to each total", sumOk);
+  check("session total equals global score (fresh start)", ranking.every((r: any) => r.total === host.players.get(r.id)!.score));
+  check("fast guesser total = sum of their 3 round scores", dg.totalOf(fast.id) === fastPts.reduce((a, b) => a + b, 0));
+  check("fast guesser outranks slow guesser", ranking.findIndex((r: any) => r.id === fast.id) < ranking.findIndex((r: any) => r.id === slow.id));
+  check("ranking sorted high to low", ranking.every((r: any, i: number) => i === 0 || ranking[i - 1].total >= r.total));
+  await sleep(300);
+  // every phone received a final personal summary that matches the host
+  const bad = bots.filter((b) => {
+    const rr = b.view.roundResult;
+    return !rr || !rr.final || rr.sid !== dg.sid || rr.total !== dg.totalOf(b.id) || rr.perRound.length !== 3 ||
+      rr.rank !== ranking.findIndex((r: any) => r.id === b.id) + 1;
+  });
+  check("all 80 phones received a correct final summary", bad.length === 0, `(${bad.length} wrong)`);
+  const pubOver = dg.pub();
+  check("public state carries top-10 board", pubOver.board?.length === 10 && pubOver.board[0].total >= pubOver.board[9].total);
+  host.endGame();
+}
+
 // ---------- BINGO ----------
 mark("bingo");
 {

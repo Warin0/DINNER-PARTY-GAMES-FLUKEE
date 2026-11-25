@@ -14,6 +14,7 @@ export interface ClientView {
   word?: { word: string; round: number; rerolls: number };
   card?: number[][];
   lastGuessPoints?: { points: number; at: number };
+  roundResult?: Extract<PrivMsg, { t: "roundResult" }>;
   claim?: { ok: boolean; place?: number; msg: string; lockUntil: number; at: number };
 }
 
@@ -75,8 +76,12 @@ export class PlayerClient {
         this.view.card = undefined;
         this.view.claim = undefined;
       }
-      if (prev === "draw") this.view.word = undefined;
+      if (prev === "draw") {
+        this.view.word = undefined;
+        this.view.roundResult = undefined;
+      }
     }
+    if (!s.game) this.view.roundResult = undefined;
     const g = s.g as { round?: number } | undefined;
     if (this.view.word && g?.round !== undefined && g.round !== this.view.word.round) this.view.word = undefined;
     this.view.state = s;
@@ -96,6 +101,9 @@ export class PlayerClient {
         break;
       case "card":
         this.view.card = m.card;
+        break;
+      case "roundResult":
+        this.view.roundResult = m;
         break;
       case "guessOk":
         this.view.lastGuessPoints = { points: m.points, at: Date.now() };
