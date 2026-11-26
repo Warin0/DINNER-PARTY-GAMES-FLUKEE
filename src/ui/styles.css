@@ -173,6 +173,8 @@ code { background: #ffffff18; padding: 1px 6px; border-radius: 6px; font-size: .
 .guesstop { display: flex; align-items: center; gap: 16px; text-align: left; }
 .reveal { font-size: 2.8rem; font-weight: 900; color: var(--warn); }
 .pad { padding: 10px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.padmain { width: 100%; display: flex; justify-content: center; }
+.padside { width: 100%; display: flex; flex-direction: column; gap: 10px; align-items: center; }
 .padtop { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 10px; }
 .wordbox { font-size: 1.25rem; background: #ffd16622; color: var(--warn); padding: 8px 16px; border-radius: 14px; border: 1px solid #ffd16644; }
 .padcanvas { width: 100%; max-width: 560px; aspect-ratio: 4 / 3; background: #fff; border-radius: 16px; touch-action: none; box-shadow: 0 10px 30px #0006; }
@@ -278,5 +280,24 @@ code { background: #ffffff18; padding: 1px 6px; border-radius: 6px; font-size: .
   .lobby-left { position: static; }
   .joinurl { display: none; }
   .tiles.t-host { --ts: 2.2rem; }
+}
+/* phone held sideways: canvas on the left sized to the screen height, tools on the right */
+@media (orientation: landscape) and (max-height: 560px) {
+  .phonebar { padding: 4px 12px; }
+  .pad { flex-direction: row; align-items: flex-start; justify-content: center; gap: 14px; padding: 8px 12px; }
+  .padmain { width: auto; flex: none; }
+  .padcanvas { width: min(calc((100dvh - 64px) * 4 / 3), 62vw); max-width: none; }
+  .padside { flex: 1; min-width: 0; max-width: 340px; align-items: stretch; gap: 8px; }
+  .padtop { flex-wrap: nowrap; }
+  .wordbox { font-size: 1.05rem; padding: 6px 12px; }
+  .palette { gap: 6px; } .sw { width: 32px; height: 32px; }
+  .padhelp { display: none; }
+  .prep { display: grid; grid-template-columns: 1.1fr 1fr; column-gap: 16px; align-items: center; max-width: 900px; padding: 8px 16px; }
+  .prep > * { grid-column: 2; }
+  .prep > .prepcard { grid-column: 1; grid-row: 1 / span 6; }
+  .picframe { min-height: 0; padding: 6px; margin-bottom: 6px; } .picframe img { max-height: 42vh; } .picframe .emoji { font-size: 5rem; }
+  .secretword { font-size: 2rem; }
+  .guess { padding: 8px 16px; } .guesstop { gap: 10px; } .ring { width: 70px; height: 70px; } .ring > span { font-size: 1.5rem; }
+  .center-block { padding: 12px; gap: 6px; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

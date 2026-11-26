@@ -239,23 +239,27 @@ function Pad({ client, g, left }: { client: PlayerClient; g: DrawPub; left: numb
 
   return (
     <div className="pad">
-      <div className="padtop">
-        <div className="wordbox">Draw: <b>{v.word ? v.word.word : "…"}</b></div>
-        {g.stage === "draw" ? <Ring left={left} total={Math.max(1, g.endsAt - g.startedAt)} small /> : <div className="ring sm"><span>…</span></div>}
+      <div className="padmain">
+        <canvas ref={ref} width={W} height={H} className="padcanvas" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />
       </div>
-      <canvas ref={ref} width={W} height={H} className="padcanvas" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />
-      <div className="palette">
-        {PALETTE.map((c) => (
-          <button key={c} className={"sw" + (c === color ? " sel" : "")} style={{ background: c }} onClick={() => setColor(c)} aria-label={c} />
-        ))}
+      <div className="padside">
+        <div className="padtop">
+          <div className="wordbox">Draw: <b>{v.word ? v.word.word : "…"}</b></div>
+          {g.stage === "draw" ? <Ring left={left} total={Math.max(1, g.endsAt - g.startedAt)} small /> : <div className="ring sm"><span>…</span></div>}
+        </div>
+        <div className="palette">
+          {PALETTE.map((c) => (
+            <button key={c} className={"sw" + (c === color ? " sel" : "")} style={{ background: c }} onClick={() => setColor(c)} aria-label={c} />
+          ))}
+        </div>
+        <div className="row tools">
+          {[3, 6, 12].map((s) => <button key={s} className={"btn small" + (s === size ? " on" : "")} onClick={() => setSize(s)}>{s === 3 ? "•" : s === 6 ? "●" : "⬤"}</button>)}
+          <button className="btn small" onClick={() => { strokes.current.pop(); redraw(); client.undo(); }}>↩ Undo</button>
+          <button className="btn small" onClick={() => { strokes.current = []; redraw(); client.clear(); }}>🗑</button>
+          {(v.word?.rerolls ?? 0) > 0 && g.solvedCount === 0 && <button className="btn small" onClick={() => client.reroll()}>🎲 New word</button>}
+        </div>
+        <p className="muted small padhelp">Don't write the word! Guessers can see your drawing on the big screen.</p>
       </div>
-      <div className="row tools">
-        {[3, 6, 12].map((s) => <button key={s} className={"btn small" + (s === size ? " on" : "")} onClick={() => setSize(s)}>{s === 3 ? "•" : s === 6 ? "●" : "⬤"}</button>)}
-        <button className="btn small" onClick={() => { strokes.current.pop(); redraw(); client.undo(); }}>↩ Undo</button>
-        <button className="btn small" onClick={() => { strokes.current = []; redraw(); client.clear(); }}>🗑</button>
-        {(v.word?.rerolls ?? 0) > 0 && g.solvedCount === 0 && <button className="btn small" onClick={() => client.reroll()}>🎲 New word</button>}
-      </div>
-      <p className="muted small">Don't write the word! Guessers can see your drawing on the big screen.</p>
     </div>
   );
 }
