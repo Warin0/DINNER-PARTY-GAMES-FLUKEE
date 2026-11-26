@@ -49,7 +49,11 @@ export function PlayerApp() {
   if (!client) {
     return (
       <div className="page center">
-        <h1 className="logo">🎉 Room {room}</h1>
+        <div className="hero">
+          <div className="herologo">🎨</div>
+          <h1>Room <span className="roomtag">{room}</span></h1>
+          <p className="muted">Draw &amp; Guess</p>
+        </div>
         <form
           className="card stack"
           onSubmit={(e) => {
@@ -95,12 +99,13 @@ function Player({ client }: { client: PlayerClient }) {
 
       {s && v.joined && s.phase === "lobby" && (
         <div className="center-block">
-          <h2>You're in! 🎉</h2>
+          <div className="avatar" style={{ background: v.color }}>{(v.name[0] || "?").toUpperCase()}</div>
+          <h2>You're in, {v.name}! 🎉</h2>
           <p className="muted">{s.counts.joined} players · {s.counts.ready} ready</p>
           <button className={"btn big " + (v.ready ? "on" : "")} onClick={() => client.setReady(!v.ready)}>
             {v.ready ? "✋ Ready! (tap to undo)" : "I'm ready to draw!"}
           </button>
-          <p className="muted small">Ready players can be picked to draw. Everyone can play bingo and race.</p>
+          <p className="muted small">Ready players can be picked to draw. Not ready? You'll still guess every round.</p>
         </div>
       )}
 

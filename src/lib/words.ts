@@ -1,32 +1,37 @@
+// Built-in English words, each with an emoji that is shown to the drawer as a reference picture.
 // Entries may contain alternative accepted answers separated by "|" (first one is displayed).
-export const WORDS: Record<"en" | "th", string[]> = {
-  en: [
-    "cat", "dog", "house", "tree", "sun", "moon", "star", "car", "bicycle", "airplane", "boat", "train",
-    "pizza", "banana", "apple", "ice cream", "hamburger", "coffee", "cake", "egg", "fish", "bird", "elephant",
-    "giraffe", "monkey", "snake", "butterfly", "spider", "flower", "mountain", "beach", "rainbow", "umbrella",
-    "guitar", "piano", "camera", "phone", "computer", "clock", "key", "glasses", "hat", "shoe", "shirt",
-    "backpack", "book", "pencil", "scissors", "chair", "bed", "door", "window", "bridge", "castle", "robot",
-    "ghost", "dragon", "pirate", "astronaut", "doctor", "wedding", "birthday", "fireworks", "snowman", "rain",
-    "volcano", "rocket", "crown", "treasure", "bottle", "candle", "balloon", "football", "swimming", "dancing",
-    "sleeping", "crying", "laughing", "fishing", "camping", "karaoke", "selfie", "traffic jam", "tuk tuk"
-  ],
-  th: [
-    "แมว|cat", "หมา|สุนัข|dog", "บ้าน|house", "ต้นไม้|tree", "พระอาทิตย์|sun", "พระจันทร์|moon", "ดาว|star",
-    "รถยนต์|รถ|car", "จักรยาน|bicycle", "เครื่องบิน|airplane", "เรือ|boat", "รถไฟ|train", "พิซซ่า|pizza",
-    "กล้วย|banana", "แอปเปิ้ล|apple", "ไอศกรีม|ไอติม|ice cream", "แฮมเบอร์เกอร์|hamburger", "กาแฟ|coffee",
-    "เค้ก|cake", "ไข่|egg", "ปลา|fish", "นก|bird", "ช้าง|elephant", "ยีราฟ|giraffe", "ลิง|monkey", "งู|snake",
-    "ผีเสื้อ|butterfly", "แมงมุม|spider", "ดอกไม้|flower", "ภูเขา|mountain", "ชายหาด|beach", "สายรุ้ง|rainbow",
-    "ร่ม|umbrella", "กีตาร์|guitar", "เปียโน|piano", "กล้อง|camera", "โทรศัพท์|มือถือ|phone", "คอมพิวเตอร์|computer",
-    "นาฬิกา|clock", "กุญแจ|key", "แว่นตา|glasses", "หมวก|hat", "รองเท้า|shoe", "เสื้อ|shirt", "กระเป๋า|backpack",
-    "หนังสือ|book", "ดินสอ|pencil", "กรรไกร|scissors", "เก้าอี้|chair", "เตียง|bed", "ประตู|door", "หน้าต่าง|window",
-    "สะพาน|bridge", "ปราสาท|castle", "หุ่นยนต์|robot", "ผี|ghost", "มังกร|dragon", "โจรสลัด|pirate",
-    "นักบินอวกาศ|astronaut", "หมอ|doctor", "งานแต่งงาน|wedding", "วันเกิด|birthday", "ดอกไม้ไฟ|fireworks",
-    "ตุ๊กตาหิมะ|snowman", "ฝน|rain", "ภูเขาไฟ|volcano", "จรวด|rocket", "มงกุฎ|crown", "สมบัติ|treasure",
-    "ขวดน้ำ|bottle", "เทียน|candle", "ลูกโป่ง|balloon", "ฟุตบอล|football", "ว่ายน้ำ|swimming", "เต้น|dancing",
-    "นอนหลับ|sleeping", "ร้องไห้|crying", "หัวเราะ|laughing", "ตกปลา|fishing", "ตั้งแคมป์|camping",
-    "คาราโอเกะ|karaoke", "เซลฟี่|selfie", "รถติด|traffic jam", "ตุ๊กตุ๊ก|tuk tuk"
-  ]
-};
+const CARDS: [string, string][] = [
+  ["cat", "🐱"], ["dog", "🐶"], ["house", "🏠"], ["tree", "🌳"], ["sun", "☀️"], ["moon", "🌙"], ["star", "⭐"],
+  ["car", "🚗"], ["bicycle|bike", "🚲"], ["airplane|plane", "✈️"], ["boat", "⛵"], ["train", "🚆"],
+  ["pizza", "🍕"], ["banana", "🍌"], ["apple", "🍎"], ["ice cream", "🍦"], ["hamburger|burger", "🍔"],
+  ["coffee", "☕"], ["cake", "🍰"], ["egg", "🥚"], ["fish", "🐟"], ["bird", "🐦"], ["elephant", "🐘"],
+  ["giraffe", "🦒"], ["monkey", "🐵"], ["snake", "🐍"], ["butterfly", "🦋"], ["spider", "🕷️"],
+  ["flower", "🌸"], ["mountain", "⛰️"], ["beach", "🏖️"], ["rainbow", "🌈"], ["umbrella", "☂️"],
+  ["guitar", "🎸"], ["piano", "🎹"], ["camera", "📷"], ["phone", "📱"], ["computer|laptop", "💻"],
+  ["clock", "🕒"], ["key", "🔑"], ["glasses", "👓"], ["hat", "🎩"], ["shoe", "👟"], ["shirt", "👕"],
+  ["backpack", "🎒"], ["book", "📖"], ["pencil", "✏️"], ["scissors", "✂️"], ["chair", "🪑"], ["bed", "🛏️"],
+  ["door", "🚪"], ["window", "🪟"], ["bridge", "🌉"], ["castle", "🏰"], ["robot", "🤖"], ["ghost", "👻"],
+  ["dragon", "🐉"], ["pirate", "🏴‍☠️"], ["astronaut", "🧑‍🚀"], ["doctor", "🧑‍⚕️"], ["wedding", "💒"],
+  ["birthday", "🎂"], ["fireworks", "🎆"], ["snowman", "⛄"], ["rain", "🌧️"], ["volcano", "🌋"],
+  ["rocket", "🚀"], ["crown", "👑"], ["treasure", "💰"], ["bottle", "🍾"], ["candle", "🕯️"],
+  ["balloon", "🎈"], ["football|soccer", "⚽"], ["swimming", "🏊"], ["dancing", "💃"], ["sleeping", "😴"],
+  ["crying", "😭"], ["laughing", "😂"], ["fishing", "🎣"], ["camping", "⛺"], ["karaoke", "🎤"],
+  ["selfie", "🤳"], ["traffic jam", "🚦"], ["tuk tuk", "🛺"],
+  ["pineapple", "🍍"], ["watermelon", "🍉"], ["mushroom", "🍄"], ["penguin", "🐧"], ["octopus", "🐙"],
+  ["turtle", "🐢"], ["whale", "🐳"], ["lion", "🦁"], ["rabbit|bunny", "🐰"], ["frog", "🐸"], ["shark", "🦈"],
+  ["cactus", "🌵"], ["sunflower", "🌻"], ["trophy", "🏆"], ["headphones", "🎧"], ["light bulb|lightbulb", "💡"],
+  ["heart", "❤️"], ["skull", "💀"], ["teeth|tooth", "🦷"]
+];
+
+/** built-in word entries ("word" or "word|alt|alt") */
+export const WORDS: string[] = CARDS.map(([w]) => w);
+
+const EMOJI = new Map<string, string>(CARDS.map(([w, e]) => [normalizeGuess(w.split("|")[0]), e]));
+
+/** emoji reference picture for a built-in word, if it has one */
+export function emojiFor(display: string): string | undefined {
+  return EMOJI.get(normalizeGuess(display));
+}
 
 export function normalizeGuess(s: string): string {
   return s

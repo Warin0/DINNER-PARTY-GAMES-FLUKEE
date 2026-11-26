@@ -48,3 +48,18 @@ npm run test:api         # checks the token function: host password + player per
 * **Host login:** `/host` asks for `HOST_PASSWORD`, checked server-side before an Ably token with host rights is issued. Phones get minimum-rights tokens (they can only send input to the host inbox, receive public state and their own private channel), so a player cannot publish game state or pose as the host. If `HOST_PASSWORD` is not set, hosting is open — always set it in production.
 * Players are identified by a random id stored on their phone; there are no player accounts.
 * Game-by-game message budget (80 phones): idle lobby ≈ 80 msg/s, finger race peaks ≈ 370 msg/s in simulation, bursts above 500 msg/s are throttled by Ably, not dropped permanently.
+
+
+## Drawing round flow (study → draw → reveal)
+
+1. A random **ready** player is picked. Their phone shows the **secret word and a reference picture** (study screen).
+2. The big screen shows "<name> is getting ready…" and guessers wait; nobody can guess yet.
+3. The drawer taps **"I'm ready to draw!"** (or the study time runs out). The picture **disappears**, the clock starts, and the big screen switches to the canvas with letter tiles.
+4. At the reveal the word is shown on the big screen and phones (with its emoji, if it has one).
+
+**Pictures**
+- Built-in words (English) come with an emoji picture.
+- In the host lobby, *Your words & pictures* lets you add your own words and attach a photo to any of them (photos are shrunk to ~40 KB, stored in the host browser, and sent only to the drawer, privately). Use `|` for extra accepted answers.
+- The host can **Skip drawer** during the study screen as well as while drawing.
+
+**Games shown in the lobby** are controlled by `src/config.ts` (`ENABLED_GAMES`). Bingo and Finger Race are hidden for now; set a flag to `true` to bring one back.

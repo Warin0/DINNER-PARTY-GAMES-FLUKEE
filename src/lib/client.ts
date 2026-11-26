@@ -11,7 +11,7 @@ export interface ClientView {
   state: PubState | null;
   /** host clock minus local clock (ms) */
   offset: number;
-  word?: { word: string; round: number; rerolls: number };
+  word?: { word: string; round: number; rerolls: number; emoji?: string; img?: string };
   card?: number[][];
   lastGuessPoints?: { points: number; at: number };
   roundResult?: Extract<PrivMsg, { t: "roundResult" }>;
@@ -97,7 +97,7 @@ export class PlayerClient {
         Object.assign(this.view, { score: m.score, ready: m.ready, rank: m.rank });
         break;
       case "word":
-        this.view.word = { word: m.word, round: m.round, rerolls: m.rerolls };
+        this.view.word = { word: m.word, round: m.round, rerolls: m.rerolls, emoji: m.emoji, img: m.img };
         break;
       case "card":
         this.view.card = m.card;
@@ -140,6 +140,10 @@ export class PlayerClient {
   }
   reroll() {
     this.send({ t: "reroll", id: this.id });
+  }
+  /** drawer: hide the reference picture and start the clock */
+  go() {
+    this.send({ t: "go", id: this.id });
   }
   claim() {
     this.send({ t: "claim", id: this.id });

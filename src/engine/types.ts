@@ -14,7 +14,8 @@ export interface GameCtx {
   now(): number;
   send(id: string, msg: PrivMsg): void;
   award(id: string, pts: number): void;
-  touch(): void;
+  /** mark public state dirty; urgent = publish on the next tick even inside the throttle window */
+  touch(urgent?: boolean): void;
   /** push personal score + rank to all phones */
   syncScores(): void;
   /** connected = heard from within the last 45 s */

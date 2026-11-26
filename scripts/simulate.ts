@@ -32,7 +32,7 @@ check("ready count = 40", [...host.players.values()].filter((p) => p.ready).leng
 // ---------- DRAW & GUESS ----------
 mark("draw");
 {
-  host.startGame({ game: "draw", opts: { rounds: 3, seconds: 5, lang: "en", revealMs: 500 } });
+  host.startGame({ game: "draw", opts: { rounds: 3, seconds: 5, revealMs: 500, prepMs: 0 } });
   await sleep(500);
   const seenDrawers = new Set<string>();
   let correct = 0;
@@ -84,7 +84,7 @@ mark("custom-draw");
   host.resetScores();
   const parsed = parseCustomWords("alpha|a1\n beta ,  alpha \n\n gamma|g|gee");
   check("custom words parsed, de-duplicated", parsed.length === 3 && parsed[0] === "alpha|a1", JSON.stringify(parsed));
-  host.startGame({ game: "draw", opts: { rounds: 3, seconds: 4, lang: "en", revealMs: 300, customWords: parsed, customOnly: true } });
+  host.startGame({ game: "draw", opts: { rounds: 3, seconds: 4, revealMs: 300, prepMs: 0, customWords: parsed, customOnly: true } });
   await sleep(500);
   const shown: string[] = [];
   for (let round = 1; round <= 3; round++) {
@@ -109,7 +109,7 @@ mark("custom-draw");
 mark("scoring");
 {
   host.resetScores();
-  host.startGame({ game: "draw", opts: { rounds: 3, seconds: 4, lang: "en", revealMs: 400 } });
+  host.startGame({ game: "draw", opts: { rounds: 3, seconds: 4, revealMs: 400, prepMs: 0 } });
   await sleep(400);
   const fast = bots[1]; // odd bots are not ready, so they never draw
   const slow = bots[3];
@@ -170,7 +170,7 @@ mark("skip");
   const evens = bots.filter((_, i) => i % 2 === 0);
   evens.slice(2).forEach((b) => (host.players.get(b.id)!.ready = false));
   const readyIds = evens.slice(0, 2).map((b) => b.id);
-  host.startGame({ game: "draw", opts: { rounds: 2, seconds: 5, lang: "en", revealMs: 300 } });
+  host.startGame({ game: "draw", opts: { rounds: 2, seconds: 5, revealMs: 300, prepMs: 0 } });
   await sleep(400);
   const dg = host.game as any;
   const first = dg.pub().drawerId;
@@ -189,7 +189,7 @@ mark("skip");
   check("new round starts clean with full timer", p2.solvedCount === 0 && p2.endsAt - p2.startedAt === 5000);
   const newBot = bots.find((b) => b.id === p2.drawerId)!;
   check("new drawer received a word", !!newBot.view.word && newBot.view.word.round === p2.round);
-  check("skip not allowed outside the drawing stage", (() => { const g2 = new (dg.constructor)(host.ctx, { rounds: 1, seconds: 5, lang: "en" }); g2.stage = "reveal"; return g2.skipDrawer() === false; })());
+  check("skip not allowed outside the drawing stage", (() => { const g2 = new (dg.constructor)(host.ctx, { rounds: 1, seconds: 5 }); g2.stage = "reveal"; return g2.skipDrawer() === false; })());
   // finish the game: round 1 (new drawer) then round 2 needs a second lap
   guesser.guess(newBot.view.word!.word);
   await sleep(300);
@@ -205,6 +205,55 @@ mark("skip");
   check("game finishes with exactly 2 counted rounds", dg.history.length === 2, `(${dg.history.length})`);
   host.endGame();
   evens.forEach((b) => (host.players.get(b.id)!.ready = true));
+}
+
+// ---------- PREP: picture + "I'm ready" ----------
+mark("prep");
+{
+  host.resetScores();
+  const img = "data:image/jpeg;base64," + "A".repeat(2000);
+  host.startGame({ game: "draw", opts: { rounds: 2, seconds: 4, revealMs: 300, prepMs: 1500, customWords: ["alpha|a1"], customOnly: true, images: { alpha: img } } });
+  await sleep(500);
+  const dg = host.game as any;
+  const p1 = dg.pub();
+  check("round starts in prep (clock not running)", p1.stage === "prep" && p1.startedAt === 0 && p1.endsAt === 0 && !!p1.prepEndsAt, JSON.stringify({ s: p1.stage }));
+  const drawer = bots.find((b) => b.id === p1.drawerId)!;
+  check("drawer received word + host picture", drawer.view.word?.word === "alpha" && drawer.view.word?.img === img);
+  check("picture not leaked to anyone else", bots.filter((b) => b !== drawer && b.view.word?.round === p1.round).length === 0);
+  const other = bots.find((b) => b !== drawer)!;
+  other.guess("alpha");
+  await sleep(300);
+  check("guesses are ignored during prep", dg.pub().solvedCount === 0 && dg.pub().stage === "prep");
+  drawer.reroll();
+  await sleep(150);
+  drawer.reroll();
+  await sleep(150);
+  check("one re-roll allowed in prep", dg.rerolls === 0);
+  drawer.go();
+  await sleep(500);
+  const p2 = dg.pub();
+  check("go starts the clock", p2.stage === "draw" && p2.endsAt - p2.startedAt === 4000 && p2.prepEndsAt === undefined, JSON.stringify({ s: p2.stage }));
+  other.guess("alpha");
+  await sleep(300);
+  check("guessing works after go", dg.pub().solvedCount === 1);
+  // let round 1 end by timeout, round 2 should auto-start drawing after prepMs
+  for (let t = 0; t < 80 && !(dg.pub().round === 2 && dg.pub().stage === "prep"); t++) await sleep(100);
+  check("round 2 begins in prep", dg.pub().round === 2 && dg.pub().stage === "prep");
+  for (let t = 0; t < 40 && dg.pub().stage === "prep"; t++) await sleep(100);
+  check("prep auto-starts drawing when time runs out", dg.pub().stage === "draw");
+  // skip works in prep too
+  for (let t = 0; t < 80 && dg.pub().stage !== "over"; t++) await sleep(100);
+  host.endGame();
+  host.startGame({ game: "draw", opts: { rounds: 1, seconds: 4, revealMs: 300, prepMs: 5000 } });
+  await sleep(300);
+  const d2 = host.game as any;
+  const first = d2.pub().drawerId;
+  const fb = bots.find((b) => b.id === first)!;
+  check("built-in words come with an emoji picture", !!fb.view.word?.emoji && !fb.view.word?.img);
+  check("skip allowed during prep", d2.skipDrawer() === true);
+  await sleep(200);
+  check("skip in prep picks someone else and stays in prep", d2.pub().drawerId !== first && d2.pub().stage === "prep" && d2.pub().round === 1);
+  host.endGame();
 }
 
 // ---------- BINGO ----------

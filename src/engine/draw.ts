@@ -1,16 +1,19 @@
 import type { DrawPub } from "../lib/protocol";
-import { WORDS, normalizeGuess, parseEntry, shuffle } from "../lib/words";
+import { WORDS, emojiFor, normalizeGuess, parseEntry, shuffle } from "../lib/words";
 import type { Game, GameCtx, Player } from "./types";
 
 export interface DrawOptions {
   rounds: number;
   seconds: number;
-  lang: "en" | "th";
   revealMs?: number;
+  /** how long the drawer may study the word + picture before the clock starts anyway (0 = start at once) */
+  prepMs?: number;
   /** host-supplied words ("word" or "word|alt|alt") */
   customWords?: string[];
   /** use only the host's words (needs at least one) */
   customOnly?: boolean;
+  /** pictures for the host's words, keyed by normalizeGuess(display word); data URLs, ~40 KB max each */
+  images?: Record<string, string>;
 }
 
 export interface RoundSummary {
@@ -27,6 +30,7 @@ export const BASE_POINTS = 100;
 export const SPEED_MAX = 400;
 export const DRAWER_PER_SOLVER = 50;
 export const DRAWER_MAX = 400;
+export const DEFAULT_PREP_MS = 20_000;
 
 export interface Stroke {
   sid: number;
@@ -50,7 +54,7 @@ export class DrawGame implements Game {
   rounds: number;
   seconds: number;
   revealMs: number;
-  lang: "en" | "th";
+  prepMs: number;
 
   private queue: string[];
   private words: string[];
@@ -58,6 +62,10 @@ export class DrawGame implements Game {
   private customOnly: boolean;
   private drawerId = "";
   private display = "";
+  private emoji?: string;
+  private img?: string;
+  private images: Record<string, string>;
+  private prepUntil = 0;
   private accepted: string[] = [];
   private hintMask: boolean[] = [];
   private hintsGiven = 0;
@@ -83,9 +91,10 @@ export class DrawGame implements Game {
   listeners = new Set<(ev: "stroke" | "redraw", s?: Stroke, pts?: [number, number][]) => void>();
 
   constructor(private ctx: GameCtx, opts: DrawOptions) {
-    this.lang = opts.lang;
     this.seconds = opts.seconds;
     this.revealMs = opts.revealMs ?? 6000;
+    this.prepMs = Math.max(0, opts.prepMs ?? DEFAULT_PREP_MS);
+    this.images = opts.images ?? {};
     const ready = [...ctx.players.values()].filter((p) => p.ready);
     this.queue = shuffle(ready.map((p) => p.id));
     this.rounds = Math.max(1, Math.min(opts.rounds, this.queue.length || 1));
@@ -96,7 +105,7 @@ export class DrawGame implements Game {
   }
 
   private pool(): string[] {
-    return shuffle(this.customOnly ? this.custom : [...this.custom, ...WORDS[this.lang]]);
+    return shuffle(this.customOnly ? this.custom : [...this.custom, ...WORDS]);
   }
 
   private nextWord(): void {
@@ -104,6 +113,8 @@ export class DrawGame implements Game {
     const entry = parseEntry(this.words.pop()!);
     this.display = entry.display;
     this.accepted = entry.accepted;
+    this.img = this.images[normalizeGuess(entry.display)];
+    this.emoji = emojiFor(entry.display);
     this.hintMask = [...entry.display].map((ch) => /[\s\p{P}\p{S}]/u.test(ch));
     this.hintsGiven = 0;
   }
@@ -137,7 +148,7 @@ export class DrawGame implements Game {
       return;
     }
     this.round++;
-    this.stage = "draw";
+    this.stage = "prep";
     this.drawerId = drawer.id;
     this.rerolls = 1;
     this.solved.clear();
@@ -146,12 +157,23 @@ export class DrawGame implements Game {
     this.strokes = [];
     this.feed = [];
     this.nextWord();
-    this.startedAt = this.ctx.now();
-    this.endsAt = this.startedAt + this.seconds * 1000;
-    this.guessers = [...this.ctx.players.values()].filter((p) => p.id !== drawer!.id && this.ctx.online(p)).length;
+    this.startedAt = 0;
+    this.endsAt = 0;
+    this.prepUntil = this.ctx.now() + this.prepMs;
     this.sendWord();
     this.emit("redraw");
-    this.ctx.touch();
+    if (this.prepMs <= 0) this.beginDrawing();
+    else this.ctx.touch(true);
+  }
+
+  /** the drawer pressed "I'm ready" (or prep ran out): hide the picture and start the clock */
+  private beginDrawing() {
+    if (this.stage !== "prep") return;
+    this.stage = "draw";
+    this.startedAt = this.ctx.now();
+    this.endsAt = this.startedAt + this.seconds * 1000;
+    this.guessers = [...this.ctx.players.values()].filter((p) => p.id !== this.drawerId && this.ctx.online(p)).length;
+    this.ctx.touch(true);
   }
 
   /** award points globally AND record them for this session's round table */
@@ -217,7 +239,7 @@ export class DrawGame implements Game {
    * and the next ready player draws a fresh word with a full timer.
    */
   skipDrawer(): boolean {
-    if (this.stage !== "draw") return false;
+    if (this.stage !== "draw" && this.stage !== "prep") return false;
     const skipped = this.ctx.players.get(this.drawerId);
     for (const [id, pts] of this.solved) {
       this.ctx.award(id, -pts);
@@ -228,7 +250,7 @@ export class DrawGame implements Game {
     this.skips++;
     const before = this.round;
     this.nextRound(this.drawerId);
-    if (this.stage === "draw") {
+    if (this.stage === "draw" || this.stage === "prep") {
       this.feed.push({ name: "Host", text: `skipped ${skipped?.name ?? "the drawer"} – new drawer!`, ok: false, at: this.ctx.now() });
     } else if (before >= 0 && this.history.length === 0) {
       // nobody left to draw and nothing was played
@@ -242,7 +264,7 @@ export class DrawGame implements Game {
   skips = 0;
 
   private sendWord() {
-    this.ctx.send(this.drawerId, { t: "word", word: this.display, round: this.round, rerolls: this.rerolls });
+    this.ctx.send(this.drawerId, { t: "word", word: this.display, round: this.round, rerolls: this.rerolls, emoji: this.emoji, img: this.img });
   }
 
   private emit(ev: "stroke" | "redraw", s?: Stroke, pts?: [number, number][]) {
@@ -283,12 +305,23 @@ export class DrawGame implements Game {
     });
     this.ctx.syncScores();
     this.sendRoundResults(this.round >= this.rounds);
-    this.ctx.touch();
+    this.ctx.touch(true);
   }
 
   onMsg(p: Player, m: any): void {
-    if (this.stage !== "draw") return;
     const isDrawer = p.id === this.drawerId;
+    if (this.stage === "prep") {
+      if (!isDrawer) return;
+      if (m.t === "go") this.beginDrawing();
+      else if (m.t === "reroll" && this.rerolls > 0) {
+        this.rerolls--;
+        this.nextWord();
+        this.sendWord();
+        this.ctx.touch();
+      }
+      return;
+    }
+    if (this.stage !== "draw") return;
     switch (m.t) {
       case "guess": {
         if (isDrawer || this.solved.has(p.id)) return;
@@ -348,11 +381,13 @@ export class DrawGame implements Game {
   }
 
   onJoin(p: Player) {
-    if (p.id === this.drawerId && this.stage === "draw") this.sendWord();
+    if (p.id === this.drawerId && (this.stage === "draw" || this.stage === "prep")) this.sendWord();
   }
 
   tick(now: number): void {
-    if (this.stage === "draw") {
+    if (this.stage === "prep") {
+      if (now >= this.prepUntil) this.beginDrawing();
+    } else if (this.stage === "draw") {
       const total = this.endsAt - this.startedAt;
       const elapsed = now - this.startedAt;
       if (this.hintsGiven < 1 && elapsed > total * 0.5) this.revealLetter();
@@ -376,6 +411,10 @@ export class DrawGame implements Game {
       drawerId: this.drawerId,
       drawerName: drawer?.name ?? "",
       hint: this.stage === "draw" ? this.hint() : "",
+      seconds: this.seconds,
+      prepMs: this.prepMs,
+      prepEndsAt: this.stage === "prep" ? this.prepUntil : undefined,
+      emoji: this.stage === "reveal" ? this.emoji : undefined,
       startedAt: this.startedAt,
       endsAt: this.endsAt,
       solvedCount: this.solved.size,

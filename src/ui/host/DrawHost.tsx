@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { HostEngine } from "../../engine/host";
 import type { DrawGame, Stroke } from "../../engine/draw";
 import { fmtSecs } from "../hooks";
+import { HintTiles } from "../HintTiles";
 import { BASE_POINTS, SPEED_MAX } from "../../engine/draw";
 
 const W = 960;
@@ -53,6 +54,7 @@ export function DrawHost({ engine, game }: { engine: HostEngine; game: DrawGame 
   const now = Date.now();
   const total = Math.max(1, pub.endsAt - pub.startedAt);
   const left = pub.endsAt - now;
+  const prepLeft = (pub.prepEndsAt ?? 0) - now;
 
   if (pub.stage === "over") return <DrawSummary engine={engine} game={game} />;
 
@@ -61,27 +63,48 @@ export function DrawHost({ engine, game }: { engine: HostEngine; game: DrawGame 
       <div className="drawmain">
         <div className="drawtop">
           <span className="pill">Round {pub.round}/{pub.rounds}</span>
-          <span className="drawer">✏️ <b>{pub.drawerName}</b> is drawing</span>
+          <span className="drawer">
+            {pub.stage === "prep" ? "🤔" : pub.stage === "draw" ? "✏️" : "🎨"} <b>{pub.drawerName}</b>{" "}
+            {pub.stage === "prep" ? "is getting ready" : pub.stage === "draw" ? "is drawing" : "drew this"}
+          </span>
           <span className="spacer" />
-          {pub.stage === "draw" && <SkipButton game={game} />}
-          {pub.stage === "draw" && <span className="timer">{fmtSecs(left)}s</span>}
+          {(pub.stage === "draw" || pub.stage === "prep") && <SkipButton game={game} />}
+          {pub.stage === "draw" && <span className={"timer" + (left <= 10000 ? " urgent" : "")}>{fmtSecs(left)}s</span>}
         </div>
         {pub.stage === "draw" && (
           <div className="bar"><i style={{ width: `${Math.max(0, Math.min(100, (left / total) * 100))}%` }} /></div>
         )}
-        <div className="hint">
-          {pub.stage === "draw" ? pub.hint : <>The word was <b>{pub.word}</b></>}
-        </div>
-        <Canvas game={game} />
+        {pub.stage === "prep" && (
+          <div className="bar prepbar"><i style={{ width: `${Math.max(0, Math.min(100, (prepLeft / Math.max(1, game.prepMs)) * 100))}%` }} /></div>
+        )}
+
+        {pub.stage === "draw" && <HintTiles hint={pub.hint} className="t-host" />}
+        {pub.stage === "reveal" && (
+          <div className="revealbanner">
+            {pub.emoji && <span className="remoji">{pub.emoji}</span>}
+            <span>The word was <b>{pub.word}</b></span>
+          </div>
+        )}
+
+        {pub.stage === "prep" ? (
+          <div className="prepstage">
+            <div className="thinker">🤔</div>
+            <h2>{pub.drawerName} is looking at their secret word…</h2>
+            <p className="muted">The clock starts when they tap <b>“I’m ready to draw”</b> on their phone{pub.prepEndsAt ? ` — or in ${fmtSecs(prepLeft)}s` : ""}.</p>
+            <p className="muted small">Not here? Use <b>Skip drawer</b> to pick someone else.</p>
+          </div>
+        ) : (
+          <Canvas game={game} />
+        )}
       </div>
       <aside className="drawside">
         {pub.stage === "reveal" && <RoundRecap game={game} />}
         {pub.stage !== "reveal" && (<>
         <div className="card">
-          <h3>✅ Guessed it ({pub.solvedCount}/{pub.guessers})</h3>
+          <h3>✅ Guessed it <span className="pill">{pub.solvedCount}/{pub.guessers}</span></h3>
           <div className="chips">
             {pub.solvers.map((n, i) => <span key={i} className="chip ready">{n}</span>)}
-            {pub.solvers.length === 0 && <span className="muted small">Nobody yet…</span>}
+            {pub.solvers.length === 0 && <span className="muted small">{pub.stage === "prep" ? "Waiting for the drawer…" : "Nobody yet…"}</span>}
           </div>
         </div>
         <div className="card feed">
@@ -91,6 +114,7 @@ export function DrawHost({ engine, game }: { engine: HostEngine; game: DrawGame 
               <b>{f.name}</b> {f.ok ? "got it! 🎉" : f.text}
             </div>
           ))}
+          {game.feed.length === 0 && <span className="muted small">Guesses will pop up here.</span>}
         </div>
         </>)}
       </aside>

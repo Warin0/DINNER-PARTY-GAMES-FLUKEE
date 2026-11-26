@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import type { PlayerClient } from "../../lib/client";
 import type { DrawPub } from "../../lib/protocol";
 import { fmtSecs, useTicker } from "../hooks";
+import { HintTiles, Ring } from "../HintTiles";
 
 const PALETTE = ["#111111", "#e74c3c", "#ff9f43", "#f1c40f", "#2ecc71", "#3498db", "#8e44ad", "#8d5524", "#ffffff"];
 
 export function DrawPlayer({ client }: { client: PlayerClient }) {
   useTicker(250);
+  // the round in which this phone already pressed "I'm ready to draw" (hides the picture instantly, before the host's next snapshot)
+  const [went, setWent] = useState(-1);
   const v = client.view;
   const g = v.state!.g as DrawPub;
   const isDrawer = g.drawerId === client.id;
@@ -47,6 +50,7 @@ export function DrawPlayer({ client }: { client: PlayerClient }) {
     return (
       <div className="center-block">
         <h2>The word was</h2>
+        {g.emoji && <div className="remoji big">{g.emoji}</div>}
         <div className="reveal">{g.word}</div>
         {rr && rr.round === g.round ? (
           <>
@@ -65,7 +69,59 @@ export function DrawPlayer({ client }: { client: PlayerClient }) {
       </div>
     );
   }
+  if (g.stage === "prep") {
+    if (!isDrawer) return <WaitPrep g={g} client={client} />;
+    if (went !== g.round) return <Prep client={client} g={g} onGo={() => { setWent(g.round); client.go(); }} />;
+  }
   return isDrawer ? <Pad client={client} g={g} left={left} /> : <Guess client={client} g={g} left={left} />;
+}
+
+/** drawer, before the clock: secret word + reference picture. Tapping "ready" hides the picture and starts the round. */
+function Prep({ client, g, onGo }: { client: PlayerClient; g: DrawPub; onGo: () => void }) {
+  const v = client.view;
+  const w = v.word && v.word.round === g.round ? v.word : undefined;
+  const left = (g.prepEndsAt ?? 0) - client.now();
+  const [pressed, setPressed] = useState(false);
+  return (
+    <div className="prep">
+      <div className="prephead">
+        <span className="pill">Round {g.round}/{g.rounds}</span>
+        <b>You're drawing! 🎨</b>
+      </div>
+      {w ? (
+        <div className="prepcard">
+          {(w.img || w.emoji) && (
+            <div className="picframe">
+              {w.img ? <img src={w.img} alt="" /> : <span className="emoji">{w.emoji}</span>}
+            </div>
+          )}
+          <div className="secretlabel">Your secret word</div>
+          <div className="secretword">{w.word}</div>
+          <p className="muted small">Study it — only you can see this. The picture disappears when you start.</p>
+        </div>
+      ) : (
+        <div className="prepcard"><p className="muted">Getting your word…</p></div>
+      )}
+      <div className="bar prepbar"><i style={{ width: `${Math.max(0, Math.min(100, (left / Math.max(1, g.prepMs)) * 100))}%` }} /></div>
+      <small className="muted">Starts automatically in {fmtSecs(left)}s</small>
+      <button className="btn big go" disabled={!w || pressed} onClick={() => { setPressed(true); onGo(); }}>✅ I'm ready to draw!</button>
+      {(w?.rerolls ?? 0) > 0 && <button className="btn ghost" onClick={() => client.reroll()}>🎲 Give me a different word</button>}
+    </div>
+  );
+}
+
+/** guessers while the drawer studies the word */
+function WaitPrep({ g, client }: { g: DrawPub; client: PlayerClient }) {
+  const left = (g.prepEndsAt ?? 0) - client.now();
+  return (
+    <div className="center-block waitprep">
+      <span className="pill">Round {g.round}/{g.rounds}</span>
+      <div className="thinker">🤔</div>
+      <h2>{g.drawerName} is getting ready…</h2>
+      <p className="muted">Get your guessing fingers ready! The clock starts as soon as they begin.</p>
+      <small className="muted">Max {fmtSecs(left)}s</small>
+    </div>
+  );
 }
 
 function Guess({ client, g, left }: { client: PlayerClient; g: DrawPub; left: number }) {
@@ -85,12 +141,21 @@ function Guess({ client, g, left }: { client: PlayerClient; g: DrawPub; left: nu
     setTimeout(() => setCooldown(false), 1200); // keeps total traffic low with 80 guessers
   };
 
+  const total = Math.max(1, g.endsAt - g.startedAt);
+  const maxNow = Math.round(100 + 400 * Math.max(0, Math.min(1, left / total)));
+
   return (
     <div className="guess">
-      <div className="timer big">{fmtSecs(left)}s</div>
-      <p className="muted"><b>{g.drawerName}</b> is drawing — look at the big screen!</p>
-      <p className="muted small">⚡ Guess fast: up to {Math.round(100 + 400 * Math.max(0, Math.min(1, left / Math.max(1, g.endsAt - g.startedAt))))} points right now</p>
-      <div className="hint">{g.hint}</div>
+      <div className="guesstop">
+        <Ring left={left} total={total} />
+        <div>
+          <div className="muted small">Round {g.round}/{g.rounds}</div>
+          <div><b>{g.drawerName}</b> is drawing</div>
+          <div className="muted small">👀 Watch the big screen</div>
+        </div>
+      </div>
+      <HintTiles hint={g.hint} className="t-phone" />
+      <p className="muted small">⚡ Guess fast — worth up to <b>{maxNow}</b> points right now</p>
       {solved ? (
         <div className="solved">✅ Correct! +{v.lastGuessPoints!.points}<br /><small>Wait for the others…</small></div>
       ) : (
@@ -176,7 +241,7 @@ function Pad({ client, g, left }: { client: PlayerClient; g: DrawPub; left: numb
     <div className="pad">
       <div className="padtop">
         <div className="wordbox">Draw: <b>{v.word ? v.word.word : "…"}</b></div>
-        <div className="timer">{fmtSecs(left)}s</div>
+        {g.stage === "draw" ? <Ring left={left} total={Math.max(1, g.endsAt - g.startedAt)} small /> : <div className="ring sm"><span>…</span></div>}
       </div>
       <canvas ref={ref} width={W} height={H} className="padcanvas" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />
       <div className="palette">

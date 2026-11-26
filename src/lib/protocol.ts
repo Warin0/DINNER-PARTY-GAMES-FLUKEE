@@ -22,12 +22,21 @@ export const channels = {
 
 // ---------- public state (host -> all phones) ----------
 export interface DrawPub {
-  stage: "draw" | "reveal" | "over";
+  /** prep = the drawer is looking at the word + picture; the clock has not started yet */
+  stage: "prep" | "draw" | "reveal" | "over";
   round: number;
   rounds: number;
   drawerId: string;
   drawerName: string;
   hint: string;
+  /** seconds a round lasts once drawing starts */
+  seconds: number;
+  /** when prep auto-starts the drawing (stage "prep") */
+  prepEndsAt?: number;
+  /** length of the prep window (ms) */
+  prepMs: number;
+  /** emoji picture of the word (shown at the reveal) */
+  emoji?: string;
   startedAt: number;
   endsAt: number;
   solvedCount: number;
@@ -70,7 +79,7 @@ export interface PubState {
 export type PrivMsg =
   | { t: "welcome"; id: string; name: string; color: string; score: number; ready: boolean }
   | { t: "me"; score: number; ready: boolean; rank: number }
-  | { t: "word"; word: string; round: number; rerolls: number }
+  | { t: "word"; word: string; round: number; rerolls: number; emoji?: string; img?: string }
   | { t: "card"; card: number[][] }
   | { t: "guessOk"; points: number }
   | {
@@ -102,6 +111,7 @@ export type InMsg =
   | { t: "clear"; id: string }
   | { t: "undo"; id: string }
   | { t: "reroll"; id: string }
+  | { t: "go"; id: string }
   | { t: "claim"; id: string }
   | { t: "steps"; id: string; n: number };
 

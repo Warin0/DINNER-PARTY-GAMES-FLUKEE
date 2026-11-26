@@ -21,6 +21,7 @@ export class HostEngine {
   listeners = new Set<() => void>();
 
   private dirty = true;
+  private urgent = false;
   private lastPub = 0;
   private unsubs: (() => void)[] = [];
   private timer: ReturnType<typeof setInterval>;
@@ -42,7 +43,7 @@ export class HostEngine {
       const p = this.players.get(id);
       if (p) p.score += pts;
     },
-    touch: () => this.touch(),
+    touch: (urgent) => this.touch(urgent),
     syncScores: () => this.sendMeToAll(),
     online: (p) => this.clock() - p.lastSeen < ONLINE_MS
   };
@@ -142,21 +143,23 @@ export class HostEngine {
   }
 
   // ---------- state publishing ----------
-  touch() {
+  touch(urgent = false) {
     this.dirty = true;
+    if (urgent) this.urgent = true;
     this.listeners.forEach((l) => l());
   }
 
   private tick() {
     const now = this.clock();
     this.game?.tick(now);
-    if (this.dirty && now - this.lastPub >= (this.game?.minPubMs ?? 400)) this.publishState();
+    if (this.dirty && (this.urgent ? now - this.lastPub >= 150 : now - this.lastPub >= (this.game?.minPubMs ?? 400))) this.publishState();
     else if (now - this.lastPub >= 10_000) this.publishState();
     this.listeners.forEach((l) => l());
   }
 
   private publishState() {
     this.dirty = false;
+    this.urgent = false;
     this.lastPub = this.clock();
     this.rev++;
     const all = [...this.players.values()];

@@ -60,7 +60,7 @@ export function HostApp() {
   if (needLogin) {
     return (
       <div className="page center">
-        <h1 className="logo">🔒 Host login</h1>
+        <div className="hero"><div className="herologo">🔒</div><h1>Host login</h1></div>
         <form className="card stack" onSubmit={(e) => { e.preventDefault(); void start(pw); }}>
           <label className="muted">Host password</label>
           <input className="input" type="password" autoFocus value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" />
@@ -89,12 +89,15 @@ function HostScreen({ engine, mode }: { engine: HostEngine; mode: string }) {
   return (
     <div className="host">
       <header className="hostbar">
+        <div className="brand">🎨 <span>Draw &amp; Guess</span></div>
         <div className="room">
           <span className="muted">Room</span> <b>{engine.room}</b>
         </div>
         <div className="muted small joinurl">{joinUrl.replace(/^https?:\/\//, "")}</div>
         <div className="spacer" />
-        <div className="pill" title="realtime connection">● {engine.tr.statusText ?? engine.tr.mode}</div>
+        <div className={"pill status" + (/^connected/i.test(engine.tr.statusText ?? "connected") ? " good" : " bad")} title="realtime connection">
+          <i /> {engine.tr.statusText ?? engine.tr.mode}
+        </div>
         <div className="pill">👥 {online}/{all.length} online</div>
         <button className="btn ghost" onClick={() => setShowScores((s) => !s)}>🏆 Scores</button>
         {engine.phase === "game" && (
