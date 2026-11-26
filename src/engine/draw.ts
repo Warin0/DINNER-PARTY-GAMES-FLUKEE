@@ -76,7 +76,6 @@ export class DrawGame implements Game {
   history: RoundSummary[] = [];
   /** points per player for each finished round: perRound.get(id)[round-1] */
   private perRound = new Map<string, number[]>();
-  private fastestMs = new Map<string, number>();
 
   // host-only view
   strokes: Stroke[] = [];
@@ -109,13 +108,28 @@ export class DrawGame implements Game {
     this.hintsGiven = 0;
   }
 
-  private nextRound() {
-    // drawer = next random ready player who is still around
-    let drawer: Player | undefined;
-    while (this.queue.length && !drawer) {
-      const cand = this.ctx.players.get(this.queue.shift()!);
-      if (cand && this.ctx.online(cand)) drawer = cand;
+  private pickDrawer(avoid?: string): Player | undefined {
+    const take = () => {
+      while (this.queue.length) {
+        const cand = this.ctx.players.get(this.queue.shift()!);
+        if (cand && cand.id !== avoid && this.ctx.online(cand) && cand.ready) return cand;
+      }
+      return undefined;
+    };
+    let d = take();
+    if (!d && this.round < this.rounds) {
+      // everyone queued has drawn (or was skipped): start another lap, preferring someone other than the last drawer
+      const eligible = [...this.ctx.players.values()].filter((p) => p.ready && this.ctx.online(p));
+      const others = eligible.filter((p) => p.id !== avoid && p.id !== this.drawerId);
+      this.queue = shuffle((others.length ? others : eligible.filter((p) => p.id !== avoid)).map((p) => p.id));
+      d = take();
     }
+    return d;
+  }
+
+  private nextRound(avoid?: string) {
+    // drawer = next random ready player who is still around
+    const drawer = this.pickDrawer(avoid);
     if (!drawer || this.round >= this.rounds) {
       this.stage = "over";
       if (this.history.length) this.sendRoundResults(true);
@@ -150,6 +164,12 @@ export class DrawGame implements Game {
     this.perRound.set(id, arr);
   }
 
+  private fastestOf(id: string): number {
+    let best = Infinity;
+    for (const h of this.history) for (const s of h.solvers) if (s.id === id) best = Math.min(best, s.ms);
+    return best;
+  }
+
   perRoundOf(id: string): number[] {
     const arr = (this.perRound.get(id) ?? []).slice();
     while (arr.length < this.history.length) arr.push(0);
@@ -163,7 +183,7 @@ export class DrawGame implements Game {
   /** session standings (everyone who joined; ties broken by fastest single guess, then name) */
   sessionRanking() {
     return [...this.ctx.players.values()]
-      .map((p) => ({ id: p.id, name: p.name, color: p.color, total: this.totalOf(p.id), fastest: this.fastestMs.get(p.id) ?? Infinity }))
+      .map((p) => ({ id: p.id, name: p.name, color: p.color, total: this.totalOf(p.id), fastest: this.fastestOf(p.id) }))
       .sort((a, b) => b.total - a.total || a.fastest - b.fastest || a.name.localeCompare(b.name));
   }
 
@@ -190,6 +210,36 @@ export class DrawGame implements Game {
       });
     });
   }
+
+  /**
+   * Host control: replace the current drawer (absent, stuck, uncomfortable...).
+   * The round is voided - points already given in it are taken back and it does not count -
+   * and the next ready player draws a fresh word with a full timer.
+   */
+  skipDrawer(): boolean {
+    if (this.stage !== "draw") return false;
+    const skipped = this.ctx.players.get(this.drawerId);
+    for (const [id, pts] of this.solved) {
+      this.ctx.award(id, -pts);
+      const arr = this.perRound.get(id);
+      if (arr) arr[this.round - 1] = (arr[this.round - 1] ?? 0) - pts;
+    }
+    this.round--; // this round never happened
+    this.skips++;
+    const before = this.round;
+    this.nextRound(this.drawerId);
+    if (this.stage === "draw") {
+      this.feed.push({ name: "Host", text: `skipped ${skipped?.name ?? "the drawer"} – new drawer!`, ok: false, at: this.ctx.now() });
+    } else if (before >= 0 && this.history.length === 0) {
+      // nobody left to draw and nothing was played
+      this.ctx.touch();
+    }
+    this.ctx.syncScores();
+    this.ctx.touch();
+    return true;
+  }
+
+  skips = 0;
 
   private sendWord() {
     this.ctx.send(this.drawerId, { t: "word", word: this.display, round: this.round, rerolls: this.rerolls });
@@ -253,7 +303,6 @@ export class DrawGame implements Game {
           this.solved.set(p.id, pts);
           this.solveOrder.push(p.id);
           this.solveMs.set(p.id, ms);
-          this.fastestMs.set(p.id, Math.min(this.fastestMs.get(p.id) ?? Infinity, ms));
           this.gain(p.id, pts);
           this.ctx.send(p.id, { t: "guessOk", points: pts });
           this.feed.push({ name: p.name, text: "", ok: true, at: this.ctx.now() });

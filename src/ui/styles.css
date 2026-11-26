@@ -175,3 +175,4 @@ code { background: #0003; padding: 0 .3em; border-radius: 4px; }
 .gainbox small { font-size: .95rem; color: var(--muted); font-weight: 600; }
 .gainbox.none { color: var(--muted); }
 .phoneboard { width: 100%; max-width: 360px; }
+.btn.danger { background: #e74c3c; }

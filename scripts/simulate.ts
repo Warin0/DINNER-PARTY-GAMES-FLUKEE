@@ -162,6 +162,51 @@ mark("scoring");
   host.endGame();
 }
 
+// ---------- HOST SKIPS THE DRAWER ----------
+mark("skip");
+{
+  host.resetScores();
+  // only two ready players, so skipping has to start a second lap
+  const evens = bots.filter((_, i) => i % 2 === 0);
+  evens.slice(2).forEach((b) => (host.players.get(b.id)!.ready = false));
+  const readyIds = evens.slice(0, 2).map((b) => b.id);
+  host.startGame({ game: "draw", opts: { rounds: 2, seconds: 5, lang: "en", revealMs: 300 } });
+  await sleep(400);
+  const dg = host.game as any;
+  const first = dg.pub().drawerId;
+  const firstBot = bots.find((b) => b.id === first)!;
+  const guesser = bots.find((b) => b.id !== first && !readyIds.includes(b.id))!;
+  guesser.guess(firstBot.view.word!.word);
+  await sleep(300);
+  check("a guess was scored before the skip", host.players.get(guesser.id)!.score >= 100 && dg.pub().solvedCount === 1);
+  const roundBefore = dg.pub().round;
+  check("skip is accepted while drawing", dg.skipDrawer() === true);
+  await sleep(200);
+  const p2 = dg.pub();
+  check("new drawer is somebody else", p2.drawerId !== first && readyIds.includes(p2.drawerId), `(${first} -> ${p2.drawerId})`);
+  check("round number unchanged (skipped round does not count)", p2.round === roundBefore && p2.stage === "draw");
+  check("points from the voided round were taken back", host.players.get(guesser.id)!.score === 0 && dg.totalOf(guesser.id) === 0, `(score ${host.players.get(guesser.id)!.score})`);
+  check("new round starts clean with full timer", p2.solvedCount === 0 && p2.endsAt - p2.startedAt === 5000);
+  const newBot = bots.find((b) => b.id === p2.drawerId)!;
+  check("new drawer received a word", !!newBot.view.word && newBot.view.word.round === p2.round);
+  check("skip not allowed outside the drawing stage", (() => { const g2 = new (dg.constructor)(host.ctx, { rounds: 1, seconds: 5, lang: "en" }); g2.stage = "reveal"; return g2.skipDrawer() === false; })());
+  // finish the game: round 1 (new drawer) then round 2 needs a second lap
+  guesser.guess(newBot.view.word!.word);
+  await sleep(300);
+  for (let t = 0; t < 80 && dg.pub().stage === "draw" && dg.pub().round === 1; t++) await sleep(100);
+  for (let t = 0; t < 40 && !(dg.pub().round === 2 && dg.pub().stage === "draw"); t++) await sleep(100);
+  const p3 = dg.pub();
+  check("round 2 starts with a refilled drawer queue", p3.round === 2 && p3.stage === "draw" && readyIds.includes(p3.drawerId), JSON.stringify({ r: p3.round, s: p3.stage }));
+  check("round 2 drawer differs from round 1's", p3.drawerId !== p2.drawerId);
+  const sk = dg.skipDrawer();
+  await sleep(200);
+  check("skipping again in round 2 works and stays on round 2", sk && dg.pub().round === 2 && dg.pub().stage === "draw");
+  for (let t = 0; t < 100 && dg.pub().stage !== "over"; t++) await sleep(100);
+  check("game finishes with exactly 2 counted rounds", dg.history.length === 2, `(${dg.history.length})`);
+  host.endGame();
+  evens.forEach((b) => (host.players.get(b.id)!.ready = true));
+}
+
 // ---------- BINGO ----------
 mark("bingo");
 {

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { HostEngine } from "../../engine/host";
 import type { DrawGame, Stroke } from "../../engine/draw";
 import { fmtSecs } from "../hooks";
@@ -63,6 +63,7 @@ export function DrawHost({ engine, game }: { engine: HostEngine; game: DrawGame 
           <span className="pill">Round {pub.round}/{pub.rounds}</span>
           <span className="drawer">✏️ <b>{pub.drawerName}</b> is drawing</span>
           <span className="spacer" />
+          {pub.stage === "draw" && <SkipButton game={game} />}
           {pub.stage === "draw" && <span className="timer">{fmtSecs(left)}s</span>}
         </div>
         {pub.stage === "draw" && (
@@ -216,5 +217,28 @@ function DrawSummary({ engine, game }: { engine: HostEngine; game: DrawGame }) {
       </div>
       <p className="muted small">Points from all games add up on the 🏆 Scores board (top bar).</p>
     </div>
+  );
+}
+
+/** Host control: replace an absent/stuck drawer. Two taps so it can't be hit by accident. */
+function SkipButton({ game }: { game: DrawGame }) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 3500);
+    return () => clearTimeout(t);
+  }, [armed]);
+  return (
+    <button
+      className={"btn small" + (armed ? " danger" : "")}
+      title="Replace the current drawer. This round is voided and replayed with someone else."
+      onClick={() => {
+        if (!armed) return setArmed(true);
+        setArmed(false);
+        game.skipDrawer();
+      }}
+    >
+      {armed ? "Tap again to skip" : "⏭ Skip drawer"}
+    </button>
   );
 }
